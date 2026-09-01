@@ -1,0 +1,38 @@
+# bash-gate global rules — starter for this machine.
+# Installed to $HOME/.claude-bash-rules/global/rules (only if absent).
+# Directives (returntype, trust) must come before any allow/deny rules.
+# Any deny wins over any allow; an unmatched command yields `ask`.
+
+returntype decision
+
+# Trusted binary directories (resolved via the inherited PATH, no realpath).
+# /usr/local/bin is intentionally omitted: it is world-writable on this machine.
+trust /opt/homebrew/bin
+trust /opt/homebrew/opt/coreutils/libexec/gnubin
+trust /usr/bin
+trust /bin
+trust /usr/sbin
+trust /sbin
+
+# --- allow (documented project commands, read-only git) ---
+allow git status ANY
+allow git log ANY
+allow git diff ANY
+allow git show ANY
+allow git branch ANY
+allow git fetch ANY
+allow ls ANY
+allow cat ANY
+allow rg ANY
+allow composer ANY
+# `ddev ANY` is broad (ddev exec can run arbitrary commands in the container).
+# Tighten to specific subcommands if that matters for your threat model.
+allow ddev ANY
+
+# --- deny (dangerous git, exec-through-flag) ---
+deny git push ANY
+deny git reset HAS --hard
+deny git HAS --ext-diff
+deny git HAS -c
+deny find HAS -exec
+deny ssh HAS -o

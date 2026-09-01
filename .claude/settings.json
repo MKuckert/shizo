@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "allow": ["Bash(nono why *)", "Bash(make *)"],
+    "deny": ["Bash(git push *)"]
+  }
+}
