@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude"],
   "meta": {
     "name": "bash-gate-claude",
-    "version": "1"
+    "version": "2"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -12,7 +12,12 @@
     "access": "readwrite"
   },
   "filesystem": {
-    "allow": ["~/.npm", "~/.go", "~/.claude-bash-rules/logs"],
+    "allow": [
+      "~/.npm",
+      "~/.go",
+      "~/.claude-bash-rules/logs",
+      "~/repos/bash-gate"
+    ],
     "deny": ["~/.gitconfig"],
     "read_file": [
       "~/.gitconfig-private",
