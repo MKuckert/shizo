@@ -368,6 +368,12 @@ Each task carries its own tests; T12 is integration only.
 - [ ] **T11 — Starter rules file.** Seed `trust` directives for this machine, and `allow`
       rules from the repo's documented commands (`ddev`, `composer`, `git`, `rg`, `ls`) —
       see `CLAUDE.md` Commands. Include the `HAS` denies from §4's example.
+- [ ] **T13 — `validate` command.** Operator-only CLI linter (§9), fully outside the hook
+      pipeline. Reuses `parseLine` (extracted from `parseTier`) to report every syntax error
+      with a line number, plus semantic warnings.
+      _Tests:_ all-errors-with-line-numbers, dead rules (uncond-deny + safe builtin), shadowed
+      allow (sound, no false positives), missing/non-dir trust path, project-tier ignored
+      directive, explicit-path and `--project` routing, installed-mode missing global.
 - [ ] **T12 — Integration and handoff.** Latency budget assertion (< 20 ms per call). Kill
       switch documented (§7). Martin adds the nono read grant and registers the hook, then
       verifies end-to-end that an allowlisted command runs and a denied one is blocked.
@@ -452,6 +458,50 @@ trustworthy containment base.
    dir is not writable. Without it every Bash command is denied.
 2. **Build** — Go 1.27 installed. Relocate `GOMODCACHE`/`GOCACHE`; `~/go` is not granted.
    Only the build needs Go; the shipped binary has no runtime dependency.
+
+---
+
+## 9. `validate` command (operator tooling)
+
+`bash-gate validate` lints rule files **before** they are installed. It is entirely
+separate from the §2 evaluation pipeline: no stdin, no hook JSON, no sandbox gate, no
+logging, no permission decision — just diagnostics on stdout and a process exit code.
+
+```
+bash-gate validate                 # resolved global tier + project tier (cwd)
+bash-gate validate FILE...         # each FILE validated as a global tier
+bash-gate validate --project FILE  # each FILE validated as a project tier
+```
+
+Dispatched in `main.go` on `os.Args[1] == "validate"`, ahead of the stdin hook path
+(the hook never passes args, so that path is untouched).
+
+**All errors, not the first.** The runtime loader (`loadConfig`/`parseTier`) is
+fail-closed: the first malformed line collapses the config to deny-all (§2 step 2). That
+is useless for editing. `parseTier`'s per-line body is extracted into `parseLine` (shared,
+identical verdict); `validateFile` drives `parseLine` over every line, records the line
+number, and **continues** past errors so all of them surface. Successfully-parsed lines
+still populate a throwaway `config` that feeds the semantic pass.
+
+**Semantic warnings** (never change the exit code unless paired with an error):
+
+- **Dead rule** — command is unconditionally denied (§2 step 9) or a safe builtin (§3);
+  either way rule matching is never reached.
+- **Shadowed allow** — a deny rule provably overrides every command the allow could match
+  (deny wins, §4.1). Sound/conservative: reported only when the deny is a literal prefix
+  (optionally ending in a trailing `ANY`, no `HAS`) that covers the allow's leading tokens.
+  No false positives; unprovable cases stay silent.
+- **Ignored project-tier directive** — `trust`/`sandbox`/`returntype` in a project file
+  (§4.2), surfaced from `config.ignored`.
+- **Missing trust dir** — a `trust` path that does not exist or is not a directory.
+- **Duplicate rule** — the same `allow`/`deny` line appears twice.
+
+**Exit codes:** `0` = no errors (warnings allowed), `1` = one or more errors, `2` = usage
+error (unknown flag, or a required/explicit file that is unreadable). A missing project
+tier in installed mode is reported as "skipped", not an error (the project tier is optional).
+
+Output is `file:line: error|warning: message`, followed by an `N error(s), M warning(s)`
+summary. Lint helpers are pure `(config) -> []finding`; only the trust-dir check does I/O.
 
 ---
 

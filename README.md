@@ -59,6 +59,25 @@ allow; an unmatched command yields `ask`.
 **See [`docs/RULES.md`](docs/RULES.md) for the full DSL reference** — matching
 semantics, directives, command resolution, and worked examples.
 
+## Validate
+
+Lint rule files before installing them — a build-time check, completely separate
+from the hook pipeline (no stdin, sandbox gate, logging, or decision):
+
+```sh
+dist/bash-gate validate                 # resolved global + project (cwd) tiers
+dist/bash-gate validate FILE...         # explicit files, validated as a global tier
+dist/bash-gate validate --project FILE  # validate FILE as a project tier
+```
+
+Unlike the fail-closed loader (which collapses to deny-all on the first bad line),
+`validate` reports **every** syntax error with its line number, plus semantic
+warnings: dead rules (a command that is unconditionally denied or a safe builtin),
+allow rules fully shadowed by a deny, missing/non-directory `trust` paths, project-
+tier directives that will be ignored, and duplicate rules. Output is
+`file:line: error|warning: message`. Exit `0` = no errors (warnings allowed),
+`1` = errors, `2` = usage.
+
 ## Kill switch
 
 The rules directory is read-only from inside the sandbox and a load failure

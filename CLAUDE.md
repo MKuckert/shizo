@@ -23,6 +23,19 @@ make install      # installs to $HOME/.claude-bash-rules (never clobbers rules)
 make install PREFIX=/tmp/x   # install elsewhere for verification
 ```
 
+Lint rule files before installing them:
+
+```sh
+dist/bash-gate validate                 # resolved global + project (cwd) tiers
+dist/bash-gate validate FILE...         # explicit files, validated as a global tier
+dist/bash-gate validate --project FILE  # validate FILE as a project tier
+```
+
+`validate` is operator-only — it never touches the hook pipeline. It reports every
+syntax error (not just the first, unlike the fail-closed loader) plus semantic
+warnings (dead rules, missing trust dirs, shadowed allows, ignored project-tier
+directives). Exit 0 = no errors (warnings allowed), 1 = errors, 2 = usage.
+
 - Go 1.27, single external dep (`mvdan.cc/sh/v3`). Unix-only in practice.
 - Tests are table-driven `_test.go` files next to each source file. Add cases
   there; every behavior change needs a test.
@@ -39,6 +52,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 | `match.go`      | `matchRule()` — pure argv-vs-rule token matching (`ANY`/`HAS`) |
 | `extract.go`    | argv extraction from the parsed AST; `<subst>`/`<var>` tokens |
 | `resolve.go`    | command resolution: safe builtins, uncond-deny, PATH lookup |
+| `validate.go`   | `bash-gate validate` — operator-only rule linter (all errors + semantic warnings) |
 | `gate.sh`       | wrapper installed as the hook `command`; fails closed      |
 | `conf/`         | starter global rules + example Claude settings             |
 

@@ -51,100 +51,115 @@ func loadConfig(globalPath, projectPath string) *config {
 	return cfg
 }
 
-// parseTier folds one rules file into cfg. Returns (reason, false) on a
-// malformed line. project restricts loosening directives.
-func parseTier(cfg *config, content string, project bool) (string, bool) {
-	sawRule := false
-	sawReturntype := false
-	sawSandbox := false
+// tierState carries the per-file "seen" flags across parseLine calls: rules must
+// follow directives, and returntype/sandbox may appear at most once.
+type tierState struct {
+	sawRule       bool
+	sawReturntype bool
+	sawSandbox    bool
+}
 
+// parseTier folds one rules file into cfg. Returns (reason, false) on the first
+// malformed line (fail-closed §2 step 2). project restricts loosening directives.
+func parseTier(cfg *config, content string, project bool) (string, bool) {
+	var st tierState
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-
-		toks, err := parseRuleWords(trimmed)
-		if err != nil {
-			return "malformed rule line: " + trimmed + " (" + err.Error() + ")", false
+		if reason, ok := parseLine(cfg, trimmed, project, &st); !ok {
+			return reason, false
 		}
-		if len(toks) == 0 {
-			continue
+	}
+	return "", true
+}
+
+// parseLine folds one non-blank, non-comment rule line into cfg, updating st.
+// Returns (reason, false) on a malformed or misplaced line. Pure over cfg/st —
+// both the fail-closed loader (parseTier) and the validator (validateTier) drive
+// it, so its verdict is identical in both.
+func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string, bool) {
+	toks, err := parseRuleWords(trimmed)
+	if err != nil {
+		return "malformed rule line: " + trimmed + " (" + err.Error() + ")", false
+	}
+	if len(toks) == 0 {
+		return "", true
+	}
+
+	head := toks[0]
+	if head.kind != tokLiteral {
+		return "malformed rule line: " + trimmed, false
+	}
+
+	switch head.text {
+	case "trust":
+		if project {
+			cfg.ignored = append(cfg.ignored, trimmed)
+			return "", true
 		}
-
-		head := toks[0]
-		if head.kind != tokLiteral {
-			return "malformed rule line: " + trimmed, false
+		if st.sawRule {
+			return "directive after rules: " + trimmed, false
 		}
-
-		switch head.text {
-		case "trust":
-			if project {
-				cfg.ignored = append(cfg.ignored, trimmed)
-				continue
-			}
-			if sawRule {
-				return "directive after rules: " + trimmed, false
-			}
-			if len(toks) != 2 || toks[1].kind != tokLiteral || !filepath.IsAbs(toks[1].text) {
-				return "trust needs one absolute directory: " + trimmed, false
-			}
-			cfg.trusted = append(cfg.trusted, toks[1].text)
-
-		case "returntype":
-			if project {
-				cfg.ignored = append(cfg.ignored, trimmed)
-				continue
-			}
-			if sawRule {
-				return "directive after rules: " + trimmed, false
-			}
-			if sawReturntype {
-				return "duplicate returntype: " + trimmed, false
-			}
-			if len(toks) != 2 || (toks[1].text != "decision" && toks[1].text != "automode") {
-				return "returntype must be decision or automode: " + trimmed, false
-			}
-			cfg.returnMode = toks[1].text
-			sawReturntype = true
-
-		case "sandbox":
-			if project {
-				cfg.ignored = append(cfg.ignored, trimmed)
-				continue
-			}
-			if sawRule {
-				return "directive after rules: " + trimmed, false
-			}
-			if sawSandbox {
-				return "duplicate sandbox: " + trimmed, false
-			}
-			if len(toks) != 2 || toks[1].kind != tokLiteral ||
-				(toks[1].text != "nono" && toks[1].text != "dangerously-none") {
-				return "sandbox must be nono or dangerously-none: " + trimmed, false
-			}
-			cfg.sandboxMode = toks[1].text
-			sawSandbox = true
-
-		case "allow":
-			r, reason, ok := buildRule("allow", toks[1:], trimmed)
-			if !ok {
-				return reason, false
-			}
-			cfg.allowRules = append(cfg.allowRules, r)
-			sawRule = true
-
-		case "deny":
-			r, reason, ok := buildRule("deny", toks[1:], trimmed)
-			if !ok {
-				return reason, false
-			}
-			cfg.denyRules = append(cfg.denyRules, r)
-			sawRule = true
-
-		default:
-			return "unknown directive: " + trimmed, false
+		if len(toks) != 2 || toks[1].kind != tokLiteral || !filepath.IsAbs(toks[1].text) {
+			return "trust needs one absolute directory: " + trimmed, false
 		}
+		cfg.trusted = append(cfg.trusted, toks[1].text)
+
+	case "returntype":
+		if project {
+			cfg.ignored = append(cfg.ignored, trimmed)
+			return "", true
+		}
+		if st.sawRule {
+			return "directive after rules: " + trimmed, false
+		}
+		if st.sawReturntype {
+			return "duplicate returntype: " + trimmed, false
+		}
+		if len(toks) != 2 || (toks[1].text != "decision" && toks[1].text != "automode") {
+			return "returntype must be decision or automode: " + trimmed, false
+		}
+		cfg.returnMode = toks[1].text
+		st.sawReturntype = true
+
+	case "sandbox":
+		if project {
+			cfg.ignored = append(cfg.ignored, trimmed)
+			return "", true
+		}
+		if st.sawRule {
+			return "directive after rules: " + trimmed, false
+		}
+		if st.sawSandbox {
+			return "duplicate sandbox: " + trimmed, false
+		}
+		if len(toks) != 2 || toks[1].kind != tokLiteral ||
+			(toks[1].text != "nono" && toks[1].text != "dangerously-none") {
+			return "sandbox must be nono or dangerously-none: " + trimmed, false
+		}
+		cfg.sandboxMode = toks[1].text
+		st.sawSandbox = true
+
+	case "allow":
+		r, reason, ok := buildRule("allow", toks[1:], trimmed)
+		if !ok {
+			return reason, false
+		}
+		cfg.allowRules = append(cfg.allowRules, r)
+		st.sawRule = true
+
+	case "deny":
+		r, reason, ok := buildRule("deny", toks[1:], trimmed)
+		if !ok {
+			return reason, false
+		}
+		cfg.denyRules = append(cfg.denyRules, r)
+		st.sawRule = true
+
+	default:
+		return "unknown directive: " + trimmed, false
 	}
 
 	return "", true

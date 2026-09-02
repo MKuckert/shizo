@@ -26,9 +26,14 @@ type hookInput struct {
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Println("bash-gate " + version)
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			fmt.Println("bash-gate " + version)
+			return
+		case "validate":
+			os.Exit(runValidate(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 	os.Exit(run(os.Stdin, os.Stdout))
 }
