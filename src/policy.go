@@ -29,8 +29,9 @@ func decide(command, cwd string, cfg *config, env environ) (Outcome, string, []c
 		return outDeny, cfg.denyReason, nil
 	}
 
-	// step 3 — sandbox gate
-	if cfg.sandboxMode == "nono" && !env.sandboxed {
+	// step 3 — sandbox gate. Fail closed: only the explicit `dangerously-none`
+	// escape hatch skips the gate; any other mode (incl. empty) denies.
+	if cfg.sandboxMode != "dangerously-none" && !env.sandboxed {
 		return outDeny, "sandbox gate: rules require 'sandbox nono' but NONO_CAP_FILE is unset", nil
 	}
 

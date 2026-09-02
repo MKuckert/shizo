@@ -70,7 +70,8 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 - `allow git status ANY` — `ANY` matches 0-n tokens (max one per rule).
 - `deny git reset HAS --hard` — `HAS` matches one flag at any position.
 - A literal argument spelled `ANY`/`HAS` must be single-quoted.
-- `sandbox nono` (default) denies unless `NONO_CAP_FILE` is set;
+- `sandbox` is **required** in the global tier (no default) — a missing directive
+  denies everything. `sandbox nono` denies unless `NONO_CAP_FILE` is set;
   `sandbox dangerously-none` removes that gate — trusted environments only.
 
 ## Conventions & guardrails

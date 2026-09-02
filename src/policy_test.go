@@ -16,7 +16,7 @@ func policyFixture(t *testing.T, extraRules string) (*config, environ, string) {
 	for _, name := range []string{"git", "ls", "curl", "find", "grep", "rm"} {
 		mkExe(t, bin, name)
 	}
-	rules := "trust " + bin + "\n" +
+	rules := "sandbox nono\ntrust " + bin + "\n" +
 		"allow git status ANY\n" +
 		"allow ls ANY\n" +
 		"deny git push ANY\n" +
@@ -63,11 +63,11 @@ func TestPolicy(t *testing.T) {
 }
 
 func TestPolicySandboxGate(t *testing.T) {
-	// default (sandbox nono) denies when not sandboxed
+	// explicit `sandbox nono` denies when not sandboxed
 	cfg, env, _ := policyFixture(t, "")
 	env.sandboxed = false
 	if got, _, _ := decide("git status", t.TempDir(), cfg, env); got != outDeny {
-		t.Error("unsandboxed under default `sandbox nono` should deny")
+		t.Error("unsandboxed under `sandbox nono` should deny")
 	}
 
 	// `sandbox dangerously-none` allows running without a sandbox.
@@ -171,7 +171,7 @@ func TestProjectTighteningApplies(t *testing.T) {
 	mkExe(t, bin, "git")
 	mkExe(t, bin, "rm")
 	dir := t.TempDir()
-	g := writeFile(t, dir, "rules", "trust "+bin+"\nallow git status ANY\nallow rm ANY\n")
+	g := writeFile(t, dir, "rules", "sandbox nono\ntrust "+bin+"\nallow git status ANY\nallow rm ANY\n")
 	projDir := t.TempDir()
 	writeFile(t, projDir, ".claude-bash-rules", "deny rm ANY\n")
 	cfg := loadConfig(g, filepath.Join(projDir, ".claude-bash-rules"))

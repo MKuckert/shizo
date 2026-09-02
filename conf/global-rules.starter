@@ -5,8 +5,9 @@
 
 returntype decision
 
-# Require a nono sandbox (default): commands are denied unless NONO_CAP_FILE is
-# set. Use `sandbox dangerously-none` to drop the gate and run with no sandbox.
+# Required: pick a sandbox gate (omitting it denies everything). `nono` denies
+# unless NONO_CAP_FILE is set; `sandbox dangerously-none` drops the gate and runs
+# with no sandbox.
 sandbox nono
 
 # Trusted binary directories (resolved via the inherited PATH, no realpath).

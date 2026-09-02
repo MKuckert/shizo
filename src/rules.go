@@ -12,7 +12,7 @@ import (
 type config struct {
 	trusted     []string
 	returnMode  string // "decision" (default) or "automode"
-	sandboxMode string // "nono" (default) or "dangerously-none"
+	sandboxMode string // "nono" or "dangerously-none" — required in the global tier, no default
 	allowRules  []rule
 	denyRules   []rule
 	ignored     []string // ignored project-tier directive lines (logged)
@@ -21,13 +21,13 @@ type config struct {
 }
 
 func denyAllConfig(reason string) *config {
-	return &config{returnMode: "decision", sandboxMode: "nono", denyAll: true, denyReason: reason}
+	return &config{returnMode: "decision", denyAll: true, denyReason: reason}
 }
 
 // loadConfig reads the global tier (required) and project tier (optional).
 // Any load/parse failure yields a deny-all config with a reason (§2 step 2).
 func loadConfig(globalPath, projectPath string) *config {
-	cfg := &config{returnMode: "decision", sandboxMode: "nono"}
+	cfg := &config{returnMode: "decision"}
 
 	data, err := os.ReadFile(globalPath)
 	if err != nil {
@@ -35,6 +35,10 @@ func loadConfig(globalPath, projectPath string) *config {
 	}
 	if reason, ok := parseTier(cfg, string(data), false); !ok {
 		return denyAllConfig(reason)
+	}
+	// sandbox is required in the global tier — absence fails closed (§3).
+	if cfg.sandboxMode == "" {
+		return denyAllConfig("global tier must declare a sandbox directive (nono or dangerously-none)")
 	}
 
 	if projectPath != "" {

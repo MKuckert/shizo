@@ -45,24 +45,47 @@ func TestValidateClean(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresSandbox(t *testing.T) {
+	// Global tier without a sandbox directive is an error, mirroring loadConfig.
+	body := "trust /opt/x\nallow ls ANY\n"
+	fs := validateFile("rules", body, false)
+	if !hasMsg(fs, "must declare a sandbox directive") {
+		t.Errorf("expected missing-sandbox error: %+v", fs)
+	}
+	if errs, _ := countLevels(fs); errs != 1 {
+		t.Errorf("missing sandbox should be an error: %+v", fs)
+	}
+	// The loader agrees: same body denies all.
+	dir := t.TempDir()
+	g := writeFile(t, dir, "rules", body)
+	if cfg := loadConfig(g, ""); !cfg.denyAll {
+		t.Error("missing sandbox should deny all")
+	}
+	// Project tier does not require it (directives are global-only there).
+	fs = validateFile(".claude-bash-rules", body, true)
+	if hasMsg(fs, "must declare a sandbox directive") {
+		t.Errorf("project tier must not require sandbox: %+v", fs)
+	}
+}
+
 func TestValidateReportsAllErrors(t *testing.T) {
-	// Two malformed lines (2 and 4); lines 1 and 3 are fine.
-	body := "allow git status ANY\nwat is this\nallow ls ANY\nallow git ANY ANY\n"
+	// Two malformed lines (3 and 5); lines 1, 2 and 4 are fine.
+	body := "sandbox nono\nallow git status ANY\nwat is this\nallow ls ANY\nallow git ANY ANY\n"
 	fs := validateFile("rules", body, false)
 	errs, _ := countLevels(fs)
 	if errs != 2 {
 		t.Fatalf("want 2 errors, got %d: %+v", errs, fs)
 	}
-	if _, ok := findingAtLine(fs, 2); !ok {
-		t.Error("missing error on line 2")
+	if _, ok := findingAtLine(fs, 3); !ok {
+		t.Error("missing error on line 3")
 	}
-	if _, ok := findingAtLine(fs, 4); !ok {
-		t.Error("missing error on line 4")
+	if _, ok := findingAtLine(fs, 5); !ok {
+		t.Error("missing error on line 5")
 	}
 }
 
 func TestValidateDeadRules(t *testing.T) {
-	body := "allow eval ANY\ndeny env ANY\nallow cd ANY\n"
+	body := "sandbox nono\nallow eval ANY\ndeny env ANY\nallow cd ANY\n"
 	fs := validateFile("rules", body, false)
 	if !hasMsg(fs, "unconditionally denied") {
 		t.Error("expected uncond-deny dead-rule warning")
@@ -76,7 +99,7 @@ func TestValidateDeadRules(t *testing.T) {
 }
 
 func TestValidateShadow(t *testing.T) {
-	body := "deny git push ANY\nallow git push --force\nallow git status ANY\n"
+	body := "sandbox nono\ndeny git push ANY\nallow git push --force\nallow git status ANY\n"
 	fs := validateFile("rules", body, false)
 	if !hasMsg(fs, "fully shadowed") {
 		t.Errorf("expected shadow warning: %+v", fs)
@@ -101,13 +124,13 @@ func TestValidateIgnoredDirectiveProjectTier(t *testing.T) {
 }
 
 func TestValidateMissingTrustDir(t *testing.T) {
-	body := "trust /definitely/not/here/xyz\nallow ls ANY\n"
+	body := "sandbox nono\ntrust /definitely/not/here/xyz\nallow ls ANY\n"
 	fs := validateFile("rules", body, false)
 	if !hasMsg(fs, "does not exist") {
 		t.Errorf("expected missing trust-dir warning: %+v", fs)
 	}
-	if f, ok := findingAtLine(fs, 1); !ok || !strings.Contains(f.msg, "not/here") {
-		t.Errorf("trust warning should anchor to line 1: %+v", fs)
+	if f, ok := findingAtLine(fs, 2); !ok || !strings.Contains(f.msg, "not/here") {
+		t.Errorf("trust warning should anchor to line 2: %+v", fs)
 	}
 }
 
@@ -138,25 +161,25 @@ func TestDenyShadowsAllow(t *testing.T) {
 
 func TestRunValidateExplicitPath(t *testing.T) {
 	dir := t.TempDir()
-	good := writeFile(t, dir, "good", "allow ls ANY\n")
+	good := writeFile(t, dir, "good", "sandbox nono\nallow ls ANY\n")
 	var out, errOut bytes.Buffer
 	if rc := runValidate([]string{good}, &out, &errOut); rc != 0 {
 		t.Errorf("clean file should exit 0, got %d: %s", rc, out.String())
 	}
 
-	bad := writeFile(t, dir, "bad", "allow ls ANY\nwat is this\n")
+	bad := writeFile(t, dir, "bad", "sandbox nono\nallow ls ANY\nwat is this\n")
 	out.Reset()
 	if rc := runValidate([]string{bad}, &out, &errOut); rc != 1 {
 		t.Errorf("bad file should exit 1, got %d: %s", rc, out.String())
 	}
-	if !strings.Contains(out.String(), "bad:2: error:") {
+	if !strings.Contains(out.String(), "bad:3: error:") {
 		t.Errorf("expected file:line: error output, got %q", out.String())
 	}
 }
 
 func TestRunValidateProjectFlagRoutes(t *testing.T) {
 	dir := t.TempDir()
-	f := writeFile(t, dir, "proj", "trust /opt/x\ndeny rm ANY\n")
+	f := writeFile(t, dir, "proj", "sandbox nono\ntrust /opt/x\ndeny rm ANY\n")
 	var out, errOut bytes.Buffer
 	// As global tier the trust line is valid (dir missing -> warning, exit 0).
 	if rc := runValidate([]string{f}, &out, &errOut); rc != 0 {

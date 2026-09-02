@@ -21,6 +21,7 @@ func writeFile(t *testing.T, dir, name, content string) string {
 
 const validGlobal = `# global
 returntype decision
+sandbox nono
 trust /opt/homebrew/bin
 allow git status ANY
 deny git push ANY
@@ -86,12 +87,12 @@ func TestProjectLooseningIgnored(t *testing.T) {
 func TestReturntype(t *testing.T) {
 	dir := t.TempDir()
 	// valid automode
-	g := writeFile(t, dir, "a/rules", "returntype automode\nallow ls ANY\n")
+	g := writeFile(t, dir, "a/rules", "returntype automode\nsandbox nono\nallow ls ANY\n")
 	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.returnMode != "automode" {
 		t.Errorf("automode: %+v", cfg)
 	}
 	// absent => decision
-	g = writeFile(t, dir, "b/rules", "allow ls ANY\n")
+	g = writeFile(t, dir, "b/rules", "sandbox nono\nallow ls ANY\n")
 	if cfg := loadConfig(g, ""); cfg.returnMode != "decision" {
 		t.Error("absent returntype should default to decision")
 	}
@@ -119,10 +120,10 @@ func TestSandbox(t *testing.T) {
 	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "dangerously-none" {
 		t.Errorf("dangerously-none: %+v", cfg)
 	}
-	// absent => nono
+	// absent => deny all (sandbox is required in the global tier)
 	g = writeFile(t, dir, "c/rules", "allow ls ANY\n")
-	if cfg := loadConfig(g, ""); cfg.sandboxMode != "nono" {
-		t.Error("absent sandbox should default to nono")
+	if cfg := loadConfig(g, ""); !cfg.denyAll {
+		t.Error("absent sandbox should deny all")
 	}
 	// unknown value => deny all
 	g = writeFile(t, dir, "d/rules", "sandbox wat\n")

@@ -101,7 +101,7 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 // validateFile parses one tier collecting all syntax errors (rather than
 // stopping at the first, as parseTier does), then runs the semantic lint pass.
 func validateFile(file, content string, project bool) []finding {
-	cfg := &config{returnMode: "decision", sandboxMode: "nono"}
+	cfg := &config{returnMode: "decision"}
 	var st tierState
 	var out []finding
 
@@ -134,6 +134,12 @@ func validateFile(file, content string, project bool) []finding {
 				seenRule[trimmed] = lineNo
 			}
 		}
+	}
+
+	// sandbox is required in the global tier — mirror loadConfig's fail-closed rule (§3).
+	if !project && !st.sawSandbox {
+		out = append(out, finding{file, 0, levelError,
+			"global tier must declare a sandbox directive (nono or dangerously-none)"})
 	}
 
 	out = append(out, lintDeadRules(cfg, file, lineByRaw)...)

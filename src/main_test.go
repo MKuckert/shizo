@@ -14,7 +14,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 	root := t.TempDir()
 	bin := t.TempDir()
 	mkExe(t, bin, "git")
-	body := "trust " + bin + "\n" + rulesBody
+	body := "sandbox nono\ntrust " + bin + "\n" + rulesBody
 	writeFile(t, root, "global/rules", body)
 	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
 	t.Setenv("PATH", bin)

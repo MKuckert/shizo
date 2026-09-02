@@ -84,13 +84,14 @@ path → deny-all.
 
 ### `sandbox <nono | dangerously-none>`
 
-Selects the sandbox gate. At most once; absent ⇒ `nono`.
+Selects the sandbox gate. **Required** — must appear exactly once, before any
+rule. A global tier with no `sandbox` line denies everything.
 
-- **`nono`** (default) — denies **everything** unless the `NONO_CAP_FILE`
-  environment variable is set. This is the safe default for the nono sandbox.
+- **`nono`** — denies **everything** unless the `NONO_CAP_FILE` environment
+  variable is set. This is the safe choice for the nono sandbox.
 - **`dangerously-none`** — removes that gate. Trusted environments only.
 
-Any other value → deny-all.
+A missing, duplicate, or any other value → deny-all.
 
 ### `returntype <decision | automode>`
 
@@ -267,6 +268,7 @@ rule can rescue them:
 
 # --- directives (must come first) ---
 returntype decision
+sandbox nono
 
 trust /opt/homebrew/bin
 trust /opt/homebrew/opt/coreutils/libexec/gnubin
