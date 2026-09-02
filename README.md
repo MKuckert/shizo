@@ -5,8 +5,14 @@ granularity. It parses each command with `mvdan.cc/sh/v3/syntax`, decomposes
 pipes and `&&`/`||`/`;` chains, resolves every command against the inherited
 `PATH` + a configured trusted-dir set, and matches argv tokens against a
 line-oriented rule DSL. Fail-closed: anything it cannot statically verify is
-denied. See [`PLAN.md`](PLAN.md) for the full design and [`docs/RULES.md`](docs/RULES.md)
-for the rules DSL reference.
+denied.
+
+**Documentation**
+
+- [`docs/RULES.md`](docs/RULES.md) — the rules DSL reference (matching, directives, resolution).
+- [`docs/EVALUATION.md`](docs/EVALUATION.md) — the ordered evaluation pipeline.
+- [`docs/CLAUDE_CODE_HOOKS.md`](docs/CLAUDE_CODE_HOOKS.md) — the Claude Code hook protocol (I/O contract, exit codes, `gate.sh`).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design decisions, residual risks, and rationale.
 
 ## Build & install
 

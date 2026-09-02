@@ -6,9 +6,9 @@ line is tokenised with mvdan's shell word-splitter, so quoting in a rule behaves
 exactly like quoting on a command line.
 
 This document is the reference for authoring rules. For the full evaluation
-pipeline see `PLAN.md`; the behaviour here is implemented in `src/rules.go`
-(loading/validation), `src/match.go` (matching), and `src/resolve.go`
-(command resolution).
+pipeline see [`EVALUATION.md`](EVALUATION.md); the behaviour here is implemented
+in `src/rules.go` (loading/validation), `src/match.go` (matching), and
+`src/resolve.go` (command resolution).
 
 ---
 
@@ -103,6 +103,17 @@ Selects the output contract. At most once; absent ⇒ `decision`.
   allowlist becomes a pure pre-filter that strips known-bad. Note: under
   `automode`, `allow` no longer guarantees a prompt bypass and unmatched
   commands no longer hit a guaranteed `ask`.
+
+What each aggregated outcome produces:
+
+| Aggregated outcome  | `decision` (default) | `automode`                      |
+| ------------------- | -------------------- | ------------------------------- |
+| deny-rule match     | `deny` object        | `deny` object                   |
+| allow-rule match    | `allow` object       | **defer** — no decision emitted |
+| neither (unmatched) | `ask` object         | **defer** — no decision emitted |
+
+The wire-level details (the `defer` sentinel, exit codes) are in
+[`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#output).
 
 Any other value → deny-all.
 
@@ -230,7 +241,8 @@ binary in a `trust`ed directory.
 
 ## 7. What is denied before rules are ever consulted
 
-These are structural denials (see `PLAN.md §2`); no `allow` rule can rescue them:
+These are structural denials (see [`EVALUATION.md`](EVALUATION.md)); no `allow`
+rule can rescue them:
 
 - **Parameter/arithmetic expansion in argv** — `git $g`, `$EDITOR foo`,
   `echo $((1+2))` as a command word. Not knowable at parse time.

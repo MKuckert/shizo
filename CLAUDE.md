@@ -12,7 +12,11 @@ matches argv tokens against a line-oriented rule DSL.
 verified is denied. When in doubt, deny — never widen behavior to make a case
 "work." A deny always wins over an allow; an unmatched command yields `ask`.
 
-`PLAN.md` is the authoritative design doc. Update `PLAN.md` when you change the design.
+The `docs/` folder is the authoritative design reference — `ARCHITECTURE.md`
+(decisions, residual risks), `EVALUATION.md` (the ordered pipeline), `RULES.md`
+(the DSL), and `CLAUDE_CODE_HOOKS.md` (the hook I/O contract). Update the
+relevant doc when you change the design. The original design plan is archived
+under `plans/`.
 
 ## Build, test, install
 
@@ -56,7 +60,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 | `gate.sh`       | wrapper installed as the hook `command`; fails closed      |
 | `conf/`         | starter global rules + example Claude settings             |
 
-## Rules DSL (see `PLAN.md §4`)
+## Rules DSL (see `docs/RULES.md`)
 
 - Directives (`returntype`, `trust`, `sandbox`) are **global-tier only** and
   must precede any `allow`/`deny`. In a project file they are ignored and logged.
@@ -71,7 +75,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 
 ## Conventions & guardrails
 
-- Match the existing terse comment style; comments cite `PLAN.md` sections.
+- Match the existing terse comment style; comments cite the relevant `docs/` section.
 - Keep matching/extraction functions **pure** (no I/O) — that is what makes them
   testable. I/O lives in `main.go`, `rules.go`, `resolve.go`.
 - Never log or echo secrets. `GATE_DEBUG` mirrors raw hook JSON (attacker-
@@ -79,7 +83,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
   default and never commit that file.
 - `dist/` is gitignored; don't commit build artifacts.
 - Don't loosen the uncond-deny set (`eval`, `exec`, `source`, `xargs`, `env`,
-  `sudo`, …) or the safe-builtin allowlist without a corresponding `PLAN.md`
+  `sudo`, …) or the safe-builtin allowlist without a corresponding `docs/ARCHITECTURE.md`
   update and tests.
 - Prefer builtin tools `Read`, `Edit`, `Grep`, `Glob` over `Bash` calls.
 - You're running inside a `nono` sandbox with restricted file access. Don't assume you can read/write arbitrary files or  directories.
