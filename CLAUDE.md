@@ -46,7 +46,9 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 
 - Directives (`returntype`, `trust`, `sandbox`) are **global-tier only** and
   must precede any `allow`/`deny`. In a project file they are ignored and logged.
-- Project tier can only **tighten** (add denies), never widen.
+- Project tier can never **widen a global `deny`**. It may add `deny` rules, and its `allow`
+  rules can turn an otherwise-unmatched (`ask`) command into `allow` — but a global `deny`
+  always wins. Loosening directives (`trust`/`sandbox`/`returntype`) are global-only.
 - `allow git status ANY` — `ANY` matches 0-n tokens (max one per rule).
 - `deny git reset HAS --hard` — `HAS` matches one flag at any position.
 - A literal argument spelled `ANY`/`HAS` must be single-quoted.

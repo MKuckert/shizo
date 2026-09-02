@@ -5,7 +5,8 @@ granularity. It parses each command with `mvdan.cc/sh/v3/syntax`, decomposes
 pipes and `&&`/`||`/`;` chains, resolves every command against the inherited
 `PATH` + a configured trusted-dir set, and matches argv tokens against a
 line-oriented rule DSL. Fail-closed: anything it cannot statically verify is
-denied. See `../../PLAN-bash-allowlist.md` for the full design.
+denied. See [`PLAN.md`](PLAN.md) for the full design and [`docs/RULES.md`](docs/RULES.md)
+for the rules DSL reference.
 
 ## Build & install
 
@@ -37,7 +38,7 @@ Then register the hook in `~/.claude/settings.json`:
 | `$HOME/.claude-bash-rules/engine/`      | read-only             | `bash-gate`, `gate.sh`         |
 | `$HOME/.claude-bash-rules/global/rules` | read-only             | global rule tier               |
 | `$HOME/.claude-bash-rules/logs/`        | writable              | `YYYY-MM-DD.jsonl` per decision |
-| `<cwd>/.claude-bash-rules`              | repo, writable        | project tier (tighten-only)    |
+| `<cwd>/.claude-bash-rules`              | repo, writable        | project tier (optional)        |
 
 `$CLAUDE_BASH_RULES_DIR` overrides the install root; the global rules are then
 read from `<that dir>/global/rules`. Logs always live under `$HOME`.
@@ -50,23 +51,13 @@ The sandbox must grant **read** (deliberately not write) on
 
 ## Rules
 
-Directives (`returntype`, `trust`, `sandbox`) are global-tier only and
-must precede any `allow`/`deny` rules. In a project file they are ignored and
-logged. Any deny wins over any allow; an unmatched command yields `ask`.
+Rules are a line-oriented, inert DSL: `allow`/`deny` rules matched against argv
+tokens (`ANY` matches 0-n tokens, `HAS` matches one flag anywhere), plus the
+global-only `trust`/`sandbox`/`returntype` directives. Any deny wins over any
+allow; an unmatched command yields `ask`.
 
-- `allow git status ANY` — `ANY` matches 0-n tokens (max one per rule).
-- `deny git reset HAS --hard` — `HAS` matches one flag at any position
-  (with `=`-splitting and single-dash bundle matching, so `-f` catches `-rf`).
-- A literal argument spelled `ANY`/`HAS` must be single-quoted.
-
-`returntype decision` (default) makes the hook decide every case. `returntype
-automode` makes it emit only denials and defer everything else to Claude Code's
-own auto-mode classifier.
-
-`sandbox nono` (default) requires a nono sandbox: commands are denied unless
-`NONO_CAP_FILE` is set. `sandbox dangerously-none` removes that gate, allowing
-commands to run with no sandbox at all — use only when you fully trust the
-environment.
+**See [`docs/RULES.md`](docs/RULES.md) for the full DSL reference** — matching
+semantics, directives, command resolution, and worked examples.
 
 ## Kill switch
 

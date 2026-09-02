@@ -38,7 +38,7 @@ unconditional-deny list (§2 step 9) and the safe-builtin list (§3).
 | `$HOME/.claude-bash-rules/engine` | **read only**  | `bash-gate` (binary), `gate.sh` (wrapper) |
 | `$HOME/.claude-bash-rules/global` | **read only**  | `rules` (global tier)                     |
 | `$HOME/.claude-bash-rules/logs/`  | writable       | `YYYY-MM-DD.jsonl`, one line per decision |
-| `<cwd>/.claude-bash-rules`        | repo, writable | project tier — tighten-only, optional     |
+| `<cwd>/.claude-bash-rules`        | repo, writable | project tier — optional; may add `deny`/`allow`, never overrides a global `deny` |
 
 Registered in `~/.claude/settings.json`:
 
@@ -65,9 +65,11 @@ As per the documentation at https://code.claude.com/docs/en/hooks#common-input-f
 
 **Step 2 — Load rules.** Global tier is **required**; absent or unparseable → `deny`
 everything. Project tier is **optional**; absent → global only, unparseable → `deny`
-everything. A project-tier line containing `trust` or `sandbox` is ignored and
-logged; the rest of the file still applies. Rules load before step 3 because the sandbox
-mode lives in them.
+everything. A project-tier line containing `trust`, `sandbox` or `returntype` is ignored
+and logged; the rest of the file — its `allow` and `deny` rules — still applies. A project
+`allow` can turn an otherwise-unmatched (`ask`) command into `allow`, but can **never**
+override a global `deny` (deny always wins, step 11). Rules load before step 3 because the
+sandbox mode lives in them.
 
 **Step 3 — Sandbox gate.** Global rules select `sandbox nono` (default) and the
 `NONO_CAP_FILE` env var is unset → `deny`. `sandbox dangerously-none` drops the gate.
@@ -415,8 +417,10 @@ Stated, not solved:
   `stdin.log`, which contains attacker-controlled command text (A1) and any secrets passed as
   argv (`git commit -m "$MSG"`, tokens on a command line). It is debug-only: leave `GATE_DEBUG`
   unset in normal operation, and gitignore/rotate `stdin.log` so it never lands in a commit.
-- **Project tier is agent-editable** — bounded to tightening, but a hostile diff can `deny`
-  things and cause confusing failures.
+- **Project tier is agent-editable** — it can never override a global `deny`, but it is not
+  purely tightening: a project `allow` can widen an otherwise-unmatched (`ask`) command to
+  `allow`, bypassing the prompt. A hostile diff can also `deny` things and cause confusing
+  failures.
 - **`ParamExp` and `Assign` denial have a usability cost** — `git commit -m "$MSG"` and
   `FOO=1 make` are denied. Expect friction here first.
 - **Depends on the nono grant** — without read access, the hook cannot load and `gate.sh`
@@ -462,7 +466,7 @@ trustworthy containment base.
 | A3  | Parser               | `mvdan.cc/sh/v3/syntax`, native Go                                                                                                                  | See Appendix C                                                                                                                                                                                                                     |
 | A4  | Path resolution      | **Inherited `PATH`** + configured trusted dirs; no `realpath`                                                                                       | The hook must resolve what bash will actually execute; realpaths are version-pinned                                                                                                                                                |
 | A5  | Scope                | Global binary + rules, project may add                                                                                                              | Allowlist is inherently two-tier                                                                                                                                                                                                   |
-| A6  | Tier precedence      | Global deny absolute                                                                                                                                | Project file is repo-editable, so it must only tighten                                                                                                                                                                             |
+| A6  | Tier precedence      | Global deny absolute; a project `allow` may widen `ask`→`allow` but never overrides a global `deny`                                                  | Project file is repo-editable, so it can never loosen a global `deny`; loosening directives (`trust`/`sandbox`/`returntype`) are global-only, but project `allow` rules are permitted and only affect otherwise-unmatched commands  |
 | A7  | Trust source         | `trust` directives, never compiled in                                                                                                               | Portability; no baked platform paths                                                                                                                                                                                               |
 | A8  | Match syntax         | argv tokens, not string globs                                                                                                                       | `git -c core.pager=sh status` defeats globs but fails token matching                                                                                                                                                               |
 | A9  | `ANY`                | 0-n tokens, max one per rule, any position                                                                                                          | Same matcher complexity as trailing-only; unlimited needs backtracking                                                                                                                                                             |
