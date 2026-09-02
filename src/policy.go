@@ -30,8 +30,8 @@ func decide(command, cwd string, cfg *config, env environ) (Outcome, string, []c
 	}
 
 	// step 3 — sandbox gate
-	if !env.sandboxed && !cfg.allowUnsandboxed {
-		return outDeny, "sandbox gate: NONO_CAP_FILE unset and rules lack 'allow unsandboxed'", nil
+	if cfg.sandboxMode == "nono" && !env.sandboxed {
+		return outDeny, "sandbox gate: rules require 'sandbox nono' but NONO_CAP_FILE is unset", nil
 	}
 
 	// step 4 — parse

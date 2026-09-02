@@ -1,9 +1,13 @@
 # bash-gate global rules — starter for this machine.
 # Installed to $HOME/.claude-bash-rules/global/rules (only if absent).
-# Directives (returntype, trust) must come before any allow/deny rules.
+# Directives (returntype, trust, sandbox) must come before any allow/deny rules.
 # Any deny wins over any allow; an unmatched command yields `ask`.
 
 returntype decision
+
+# Require a nono sandbox (default): commands are denied unless NONO_CAP_FILE is
+# set. Use `sandbox dangerously-none` to drop the gate and run with no sandbox.
+sandbox nono
 
 # Trusted binary directories (resolved via the inherited PATH, no realpath).
 # /usr/local/bin is intentionally omitted: it is world-writable on this machine.

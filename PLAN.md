@@ -65,12 +65,12 @@ As per the documentation at https://code.claude.com/docs/en/hooks#common-input-f
 
 **Step 2 — Load rules.** Global tier is **required**; absent or unparseable → `deny`
 everything. Project tier is **optional**; absent → global only, unparseable → `deny`
-everything. A project-tier line containing `trust` or `allow unsandboxed` is ignored and
+everything. A project-tier line containing `trust` or `sandbox` is ignored and
 logged; the rest of the file still applies. Rules load before step 3 because the sandbox
-escape hatch lives in them.
+mode lives in them.
 
-**Step 3 — Sandbox gate.** `NONO_CAP_FILE` env var unset and global rules lack `allow unsandboxed`
-→ `deny`.
+**Step 3 — Sandbox gate.** Global rules select `sandbox nono` (default) and the
+`NONO_CAP_FILE` env var is unset → `deny`. `sandbox dangerously-none` drops the gate.
 
 **Step 4 — Parse** with `syntax.NewParser()`. Parse error → `deny`, quoting the parser's
 position and message.
@@ -294,9 +294,12 @@ expansion.
 - Comments: only lines whose first non-whitespace character is `#`. **Trailing comments are
   not supported** — a `#` mid-line is an ordinary token.
 - Blank lines ignored.
-- Directives: `allow`, `deny`, `trust`, `allow unsandboxed`, `returntype`.
-- `trust`, `allow unsandboxed` and `returntype` are **global-tier only** — all can loosen
+- Directives: `allow`, `deny`, `trust`, `sandbox`, `returntype`.
+- `trust`, `sandbox` and `returntype` are **global-tier only** — all can loosen
   policy. In a project file they are ignored and logged. Must come before any `allow`/`deny` rules.
+- `sandbox <nono|dangerously-none>` selects the sandbox gate (§ step 3); at most once. Absent
+  ⇒ `nono`, which denies unless `NONO_CAP_FILE` is set. `dangerously-none` drops the gate and
+  loosens policy — which is why it is global-tier only. An unknown value → deny everything.
 - `returntype <decision|automode>` selects the output contract (§2.1); at most once. Absent
   ⇒ `decision`. `automode` loosens policy — non-deny outcomes defer to the auto-mode
   classifier instead of a guaranteed `allow`/`ask` — which is why it is global-tier only. An
@@ -331,7 +334,7 @@ Each task carries its own tests; T12 is integration only.
       project (`<cwd>/.claude-bash-rules`, exact cwd, no ancestor walk). Tier existence
       semantics per §2 step 2. Tokenise with the word-splitter. Validate per §4.2.
       _Tests:_ missing global → deny-all; missing project → global only; malformed line →
-      deny-all; `trust`/`allow unsandboxed`/`returntype` in project tier → ignored + logged;
+      deny-all; `trust`/`sandbox`/`returntype` in project tier → ignored + logged;
       `returntype` valid values, single occurrence, unknown value → deny-all, absent ⇒
       `decision`.
 - [ ] **T4 — Matcher.** §4.1. Pure function over `(argv, rule)`, no I/O.
@@ -469,7 +472,7 @@ trustworthy containment base.
 | A13 | Hidden command words | Recurse `CmdSubst`/`ProcSubst`; deny `ParamExp`/`ArithmExp`/`FuncDecl`                                                                              | Substitution contents are statically visible; parameter values are not                                                                                                                                                             |
 | A14 | Self-protection      | Out of scope — Bash only                                                                                                                            | Handled by the nono profile                                                                                                                                                                                                        |
 | A15 | Config format        | Line-oriented, inert DSL                                                                                                                            | Project tier is attacker-editable; never evaluate it                                                                                                                                                                               |
-| A16 | Sandbox gate         | Require `NONO_CAP_FILE`; `allow unsandboxed` global-only                                                                                            | The escape hatch loosens, so the project tier must not reach it                                                                                                                                                                    |
+| A16 | Sandbox gate         | `sandbox nono` requires `NONO_CAP_FILE`; `sandbox` directive global-only                                                                            | `dangerously-none` loosens, so the project tier must not reach it                                                                                                                                                                  |
 | A17 | Location             | `$HOME/.claude-bash-rules/`, read-only                                                                                                              | `~/.claude` is writable from inside the sandbox                                                                                                                                                                                    |
 | A18 | Failure              | Deny with reason; log all; deny on bad exit **or** empty/non-JSON output                                                                            | A control that fails open when it crashes is one segfault from absent                                                                                                                                                              |
 | A19 | Logs                 | `$HOME/.claude-bash-rules/logs/`                                                                                                                    | Rules dir is read-only; log tampering accepted                                                                                                                                                                                     |

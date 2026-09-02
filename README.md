@@ -50,7 +50,7 @@ The sandbox must grant **read** (deliberately not write) on
 
 ## Rules
 
-Directives (`returntype`, `trust`, `allow unsandboxed`) are global-tier only and
+Directives (`returntype`, `trust`, `sandbox`) are global-tier only and
 must precede any `allow`/`deny` rules. In a project file they are ignored and
 logged. Any deny wins over any allow; an unmatched command yields `ask`.
 
@@ -62,6 +62,11 @@ logged. Any deny wins over any allow; an unmatched command yields `ask`.
 `returntype decision` (default) makes the hook decide every case. `returntype
 automode` makes it emit only denials and defer everything else to Claude Code's
 own auto-mode classifier.
+
+`sandbox nono` (default) requires a nono sandbox: commands are denied unless
+`NONO_CAP_FILE` is set. `sandbox dangerously-none` removes that gate, allowing
+commands to run with no sandbox at all — use only when you fully trust the
+environment.
 
 ## Kill switch
 

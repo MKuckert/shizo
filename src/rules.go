@@ -10,24 +10,24 @@ import (
 )
 
 type config struct {
-	trusted          []string
-	returnMode       string // "decision" (default) or "automode"
-	allowUnsandboxed bool
-	allowRules       []rule
-	denyRules        []rule
-	ignored          []string // ignored project-tier directive lines (logged)
-	denyAll          bool
-	denyReason       string
+	trusted     []string
+	returnMode  string // "decision" (default) or "automode"
+	sandboxMode string // "nono" (default) or "dangerously-none"
+	allowRules  []rule
+	denyRules   []rule
+	ignored     []string // ignored project-tier directive lines (logged)
+	denyAll     bool
+	denyReason  string
 }
 
 func denyAllConfig(reason string) *config {
-	return &config{returnMode: "decision", denyAll: true, denyReason: reason}
+	return &config{returnMode: "decision", sandboxMode: "nono", denyAll: true, denyReason: reason}
 }
 
 // loadConfig reads the global tier (required) and project tier (optional).
 // Any load/parse failure yields a deny-all config with a reason (§2 step 2).
 func loadConfig(globalPath, projectPath string) *config {
-	cfg := &config{returnMode: "decision"}
+	cfg := &config{returnMode: "decision", sandboxMode: "nono"}
 
 	data, err := os.ReadFile(globalPath)
 	if err != nil {
@@ -56,6 +56,7 @@ func loadConfig(globalPath, projectPath string) *config {
 func parseTier(cfg *config, content string, project bool) (string, bool) {
 	sawRule := false
 	sawReturntype := false
+	sawSandbox := false
 
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -107,19 +108,25 @@ func parseTier(cfg *config, content string, project bool) (string, bool) {
 			cfg.returnMode = toks[1].text
 			sawReturntype = true
 
-		case "allow":
-			// `allow unsandboxed` is the escape-hatch directive, not a rule.
-			if len(toks) == 2 && toks[1].kind == tokLiteral && toks[1].text == "unsandboxed" {
-				if project {
-					cfg.ignored = append(cfg.ignored, trimmed)
-					continue
-				}
-				if sawRule {
-					return "directive after rules: " + trimmed, false
-				}
-				cfg.allowUnsandboxed = true
+		case "sandbox":
+			if project {
+				cfg.ignored = append(cfg.ignored, trimmed)
 				continue
 			}
+			if sawRule {
+				return "directive after rules: " + trimmed, false
+			}
+			if sawSandbox {
+				return "duplicate sandbox: " + trimmed, false
+			}
+			if len(toks) != 2 || toks[1].kind != tokLiteral ||
+				(toks[1].text != "nono" && toks[1].text != "dangerously-none") {
+				return "sandbox must be nono or dangerously-none: " + trimmed, false
+			}
+			cfg.sandboxMode = toks[1].text
+			sawSandbox = true
+
+		case "allow":
 			r, reason, ok := buildRule("allow", toks[1:], trimmed)
 			if !ok {
 				return reason, false

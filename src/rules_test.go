@@ -59,13 +59,13 @@ func TestProjectLooseningIgnored(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", validGlobal)
 	proj := writeFile(t, dir, ".claude-bash-rules",
-		"trust /evil/bin\nallow unsandboxed\nreturntype automode\ndeny rm ANY\n")
+		"trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n")
 	cfg := loadConfig(g, proj)
 	if cfg.denyAll {
 		t.Fatal("project loosening should be ignored, not deny-all")
 	}
-	if cfg.allowUnsandboxed {
-		t.Error("project `allow unsandboxed` must be ignored")
+	if cfg.sandboxMode != "nono" {
+		t.Error("project `sandbox dangerously-none` must be ignored")
 	}
 	if cfg.returnMode != "decision" {
 		t.Error("project `returntype` must be ignored")
@@ -104,6 +104,35 @@ func TestReturntype(t *testing.T) {
 	g = writeFile(t, dir, "d/rules", "returntype decision\nreturntype automode\n")
 	if cfg := loadConfig(g, ""); !cfg.denyAll {
 		t.Error("duplicate returntype should deny all")
+	}
+}
+
+func TestSandbox(t *testing.T) {
+	dir := t.TempDir()
+	// explicit nono
+	g := writeFile(t, dir, "a/rules", "sandbox nono\nallow ls ANY\n")
+	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "nono" {
+		t.Errorf("nono: %+v", cfg)
+	}
+	// explicit dangerously-none
+	g = writeFile(t, dir, "b/rules", "sandbox dangerously-none\nallow ls ANY\n")
+	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "dangerously-none" {
+		t.Errorf("dangerously-none: %+v", cfg)
+	}
+	// absent => nono
+	g = writeFile(t, dir, "c/rules", "allow ls ANY\n")
+	if cfg := loadConfig(g, ""); cfg.sandboxMode != "nono" {
+		t.Error("absent sandbox should default to nono")
+	}
+	// unknown value => deny all
+	g = writeFile(t, dir, "d/rules", "sandbox wat\n")
+	if cfg := loadConfig(g, ""); !cfg.denyAll {
+		t.Error("unknown sandbox should deny all")
+	}
+	// duplicate => deny all
+	g = writeFile(t, dir, "e/rules", "sandbox nono\nsandbox dangerously-none\n")
+	if cfg := loadConfig(g, ""); !cfg.denyAll {
+		t.Error("duplicate sandbox should deny all")
 	}
 }
 

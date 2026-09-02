@@ -63,11 +63,28 @@ func TestPolicy(t *testing.T) {
 }
 
 func TestPolicySandboxGate(t *testing.T) {
+	// default (sandbox nono) denies when not sandboxed
 	cfg, env, _ := policyFixture(t, "")
 	env.sandboxed = false
-	got, _, _ := decide("git status", t.TempDir(), cfg, env)
-	if got != outDeny {
-		t.Error("unsandboxed without `allow unsandboxed` should deny")
+	if got, _, _ := decide("git status", t.TempDir(), cfg, env); got != outDeny {
+		t.Error("unsandboxed under default `sandbox nono` should deny")
+	}
+
+	// `sandbox dangerously-none` allows running without a sandbox.
+	// The directive must precede the rules, so it goes in the global tier here
+	// rather than via extraRules (which is appended after the allow/deny lines).
+	dir := t.TempDir()
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	g := writeFile(t, dir, "rules",
+		"sandbox dangerously-none\ntrust "+bin+"\nallow git status ANY\n")
+	cfg = loadConfig(g, "")
+	if cfg.denyAll {
+		t.Fatalf("config denied all: %s", cfg.denyReason)
+	}
+	env = environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: false}
+	if got, reason, _ := decide("git status", t.TempDir(), cfg, env); got != outAllow {
+		t.Errorf("dangerously-none unsandboxed: got %s (%s), want allow", got, reason)
 	}
 }
 

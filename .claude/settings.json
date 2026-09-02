@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["Bash(nono why *)", "Bash(make *)"],
+    "allow": ["Bash(nono why *)", "Bash(make *)", "Bash(go *)"],
     "deny": ["Bash(git push *)"]
   }
 }
