@@ -9,7 +9,43 @@ rule DSL see [`RULES.md`](RULES.md); for the Claude Code wire contract see
 
 ## Foundational assumptions
 
-Two properties of the Claude Code Bash tool the whole design rests on:
+### Operating context
+
+Two properties of the deployment the whole gate exists to serve:
+
+- **The agent (Claude / the Agent Harness) runs inside a sandbox.** The gate is
+  a second, complementary layer, not the only wall: it assumes the harness is
+  already confined by a sandbox (in practice `nono`) that bounds filesystem and
+  network reach. This is what lets several decisions stand as written — the gate
+  ships its engine and rules read-only *because* `~/.claude` is writable from
+  inside that sandbox (**Install location**); self-protection of the gate's own
+  files is delegated to the sandbox profile (**Self-protection**); the
+  **Sandbox gate** actively refuses to run unless that sandbox is present
+  (`NONO_CAP_FILE`), so a rule set can never silently execute unconfined; and
+  redirect containment exists precisely because a write like
+  `> ~/.claude/settings.json` is *sandbox-permitted* and therefore still needs
+  bounding here (**Redirects**). Remove the sandbox and these are no longer
+  sufficient: the agent could edit the rules, disable the hook, or reach files
+  the containment logic assumed were unreachable.
+- **The user wants safety without approving every call.** The point of the gate
+  is to remove the human from the common path while keeping a backstop for the
+  uncommon one. This is the whole justification for the **outcome model**:
+  known-good commands `allow` silently, known-bad `deny`, and only the genuinely
+  *unmatched* fall through to `ask`. A design that denied everything unknown, or
+  prompted on everything, would satisfy "safe" but violate this assumption; one
+  that allowed everything unknown would satisfy "no prompts" but violate safety.
+  The allowlist-with-`ask`-fallthrough is the specific shape that honours both,
+  and `automode` is the variant that hands the fallthrough to Claude Code's
+  classifier when even fewer prompts are wanted.
+
+If the sandbox assumption fails, the containment, install-location, and
+self-protection decisions must be revisited; if the low-friction assumption
+fails, the outcome model's `ask` fallthrough is the wrong default.
+
+### Bash tool mechanics
+
+Two properties of the Claude Code Bash tool the containment and assignment logic
+rest on:
 
 - **Shell state does not persist across calls.** Env vars, functions, and
   aliases are re-initialised from the user's profile on every Bash call. This is
@@ -24,7 +60,7 @@ Two properties of the Claude Code Bash tool the whole design rests on:
   one reported, which makes `cwd` a trustworthy containment base for redirect and
   `./` resolution.
 
-If either assumption ever changes, the containment and assignment-denial designs
+If either mechanic ever changes, the containment and assignment-denial designs
 must be revisited.
 
 ---
