@@ -1,0 +1,7 @@
+- [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
+- [ ] [automode should return `allow`, only omit `ask`](plans/drafts/PLAN-automode-allow.md)
+- [ ] [Add `bash-gate test` command to accept a raw bash command and let the pipeline validate like it's a real hook. `cwd` is derived or passed as argument.](plans/drafts/PLAN-test-command.md)
+- [ ] [Add self-testing for sandbox env: global rules readable but not writable, logs writable, …](plans/drafts/PLAN-sandbox-selftest.md)
+- [ ] [Add a default `nono` profile as an example](plans/drafts/PLAN-nono-profile-example.md)
+- [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
+- [ ] [Add a Language Server?](plans/drafts/PLAN-language-server.md) https://share.gemini.google/oEPdHxfRQHPJ
