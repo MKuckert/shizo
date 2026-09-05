@@ -35,6 +35,14 @@ dist/bash-gate validate FILE...         # explicit files, validated as a global 
 dist/bash-gate validate --project FILE  # validate FILE as a project tier
 ```
 
+Dry-run a command through the pipeline (operator-only; never logs or emits hook JSON):
+
+```sh
+dist/bash-gate test --assume-sandboxed 'git status'   # command from args or stdin
+dist/bash-gate test --cwd DIR --json 'git push'       # pick a project tier; log-line shape
+dist/bash-gate test --stdin-json < hook.json          # replay a full hook JSON
+```
+
 `validate` is operator-only — it never touches the hook pipeline. It reports every
 syntax error (not just the first, unlike the fail-closed loader) plus semantic
 warnings (dead rules, missing trust dirs, shadowed allows, ignored project-tier

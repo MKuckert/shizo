@@ -33,6 +33,8 @@ func main() {
 			return
 		case "validate":
 			os.Exit(runValidate(os.Args[2:], os.Stdout, os.Stderr))
+		case "test":
+			os.Exit(runTest(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 		}
 	}
 	os.Exit(run(os.Stdin, os.Stdout))

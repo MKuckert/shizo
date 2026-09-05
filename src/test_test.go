@@ -1,0 +1,118 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// setupTest mirrors setupRun but leaves NONO_CAP_FILE unset so the sandbox gate
+// is exercisable via --assume-sandboxed. Returns the trusted bin dir.
+func setupTest(t *testing.T, rulesBody string) string {
+	t.Helper()
+	root := t.TempDir()
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	body := "sandbox nono\ntrust " + bin + "\n" + rulesBody
+	writeFile(t, root, "global/rules", body)
+	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
+	t.Setenv("PATH", bin)
+	t.Setenv("NONO_CAP_FILE", "") // gate off by default; --assume-sandboxed flips it
+	t.Setenv("HOME", t.TempDir())
+	return bin
+}
+
+func test(t *testing.T, stdin string, args ...string) (int, string, string) {
+	t.Helper()
+	var out, errb bytes.Buffer
+	rc := runTest(args, strings.NewReader(stdin), &out, &errb)
+	return rc, out.String(), errb.String()
+}
+
+func TestTestAllowAskDeny(t *testing.T) {
+	setupTest(t, "allow git status ANY\ndeny git push ANY\n")
+
+	rc, out, _ := test(t, "", "--assume-sandboxed", "git", "status")
+	if rc != 0 || !strings.Contains(out, "decision: allow") {
+		t.Errorf("allow: rc=%d out=%q", rc, out)
+	}
+
+	rc, out, _ = test(t, "", "--assume-sandboxed", "git", "commit")
+	if rc != 0 || !strings.Contains(out, "decision: ask") {
+		t.Errorf("ask: rc=%d out=%q", rc, out)
+	}
+
+	rc, out, _ = test(t, "", "--assume-sandboxed", "git", "push")
+	if rc != 2 || !strings.Contains(out, "decision: deny") {
+		t.Errorf("deny: rc=%d out=%q", rc, out)
+	}
+}
+
+// --cwd selects which project tier is loaded, changing the decision.
+func TestTestCwdPicksProjectTier(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+	proj := t.TempDir()
+	writeFile(t, proj, ".claude-bash-rules", "deny git status ANY\n")
+
+	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", proj, "git", "status")
+	if rc != 2 || !strings.Contains(out, "decision: deny") {
+		t.Errorf("project tier deny not applied: rc=%d out=%q", rc, out)
+	}
+
+	// Elsewhere the global allow stands.
+	rc, out, _ = test(t, "", "--assume-sandboxed", "--cwd", t.TempDir(), "git", "status")
+	if rc != 0 || !strings.Contains(out, "decision: allow") {
+		t.Errorf("global allow not applied: rc=%d out=%q", rc, out)
+	}
+}
+
+// Without --assume-sandboxed the sandbox gate denies; the flag flips it.
+func TestTestAssumeSandboxedFlipsGate(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+
+	rc, out, errb := test(t, "", "git", "status")
+	if rc != 2 || !strings.Contains(out, "decision: deny") {
+		t.Errorf("gate should deny unsandboxed: rc=%d out=%q", rc, out)
+	}
+	if !strings.Contains(errb, "--assume-sandboxed") {
+		t.Errorf("missing sandbox-gate hint: %q", errb)
+	}
+
+	rc, out, _ = test(t, "", "--assume-sandboxed", "git", "status")
+	if rc != 0 || !strings.Contains(out, "decision: allow") {
+		t.Errorf("--assume-sandboxed should allow: rc=%d out=%q", rc, out)
+	}
+}
+
+func TestTestJSONShape(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+	rc, out, _ := test(t, "", "--assume-sandboxed", "--json", "git", "status")
+	if rc != 0 {
+		t.Fatalf("rc=%d out=%q", rc, out)
+	}
+	var ll logLine
+	if err := json.Unmarshal([]byte(out), &ll); err != nil {
+		t.Fatalf("bad JSON %q: %v", out, err)
+	}
+	if ll.Decision != "allow" || ll.Command != "git status" || len(ll.Commands) != 1 {
+		t.Errorf("unexpected log line: %+v", ll)
+	}
+}
+
+func TestTestStdinJSON(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+	in := `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`
+	rc, out, _ := test(t, in, "--assume-sandboxed", "--stdin-json")
+	if rc != 0 || !strings.Contains(out, "decision: allow") {
+		t.Errorf("stdin-json: rc=%d out=%q", rc, out)
+	}
+}
+
+func TestTestMissingCommand(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+	rc, _, errb := test(t, "", "--assume-sandboxed")
+	if rc != 2 || !strings.Contains(errb, "no command given") {
+		t.Errorf("missing command: rc=%d err=%q", rc, errb)
+	}
+}

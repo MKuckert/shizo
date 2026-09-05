@@ -84,6 +84,24 @@ tier directives that will be ignored, and duplicate rules. Output is
 `file:line: error|warning: message`. Exit `0` = no errors (warnings allowed),
 `1` = errors, `2` = usage.
 
+## Test
+
+Dry-run a command through the full pipeline to see what the gate would do —
+operator-facing, so it never logs and never emits hook JSON:
+
+```sh
+dist/bash-gate test 'git status'                      # command as arguments
+dist/bash-gate test --cwd /path/to/repo 'git status'  # pick a project tier
+echo 'git push' | dist/bash-gate test                 # command from stdin
+dist/bash-gate test --stdin-json < hook.json          # replay a full hook JSON
+```
+
+The evaluation is faithful to the hook (§2), including exit codes (`2` on deny,
+`0` on allow/ask). Because operators run outside the sandbox — where the sandbox
+gate denies everything — pass `--assume-sandboxed` to exercise the rules; a
+sandbox-gate-only deny prints a hint pointing at that flag. `--json` emits the
+machine-readable log-line shape instead of the human table.
+
 ## Kill switch
 
 The rules directory is read-only from inside the sandbox and a load failure
