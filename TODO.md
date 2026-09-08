@@ -5,3 +5,5 @@
 - [ ] [Add a default `nono` profile as an example](plans/drafts/PLAN-nono-profile-example.md)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
 - [ ] [Add a Language Server?](plans/drafts/PLAN-language-server.md) https://share.gemini.google/oEPdHxfRQHPJ
+- [ ] [Enforce readonly project-level rules in sandbox?](plans/drafts/PLAN-readonly-project-rules.md)
+- [ ] [Add `bash-gate --help`, `bash-gate -?` and `bash-gate help` command to show help for subcommands](plans/drafts/PLAN-help-command.md)
