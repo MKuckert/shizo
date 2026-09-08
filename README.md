@@ -76,6 +76,9 @@ dist/bash-gate validate FILE...         # explicit files, validated as a global 
 dist/bash-gate validate --project FILE  # validate FILE as a project tier
 ```
 
+Run `dist/bash-gate help` for a subcommand overview, or `help <command>` (also
+`<command> --help`) for per-command usage.
+
 Unlike the fail-closed loader (which collapses to deny-all on the first bad line),
 `validate` reports **every** syntax error with its line number, plus semantic
 warnings: dead rules (a command that is unconditionally denied or a safe builtin),

@@ -25,19 +25,69 @@ type hookInput struct {
 // -ldflags "-X main.version=...". Defaults to "dev" for plain `go build`.
 var version = "dev"
 
+// rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
+// It indexes the operator subcommands; each owns its own detailed usage const.
+const rootUsage = `bash-gate — a Claude Code PreToolUse hook that allowlists Bash
+commands at subcommand granularity. With no arguments it runs as the hook:
+reads hook JSON on stdin, emits a decision. The subcommands below are
+operator-only and never touch the hook pipeline.
+
+usage: bash-gate [command] [args]
+
+Commands:
+  (none)     hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
+  validate   lint rule files (all errors + semantic warnings)
+  test       dry-run a command through the evaluation pipeline
+  help [cmd] show this overview, or detailed usage for a command
+             (aliases: --help, -h, -?)
+  --version  print the version (alias: -v)
+
+Rules live in $CLAUDE_BASH_RULES_DIR (default ~/.claude-bash-rules): the global
+tier under global/rules, an optional per-project tier at <cwd>/.claude-bash-rules.
+See docs/RULES.md. Run "bash-gate help <command>" for per-command usage.`
+
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	os.Exit(dispatch(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+// dispatch routes operator subcommands; with no args it runs as the hook (the
+// arg-less default gate.sh invokes). An unrecognised first arg is a mistyped
+// subcommand, not hook input, so it errors rather than blocking on stdin.
+func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		switch args[0] {
 		case "--version", "-v":
-			fmt.Println("bash-gate " + version)
-			return
+			fmt.Fprintln(stdout, "bash-gate "+version)
+			return 0
+		case "help", "--help", "-h", "-?":
+			return runHelp(args[1:], stdout)
 		case "validate":
-			os.Exit(runValidate(os.Args[2:], os.Stdout, os.Stderr))
+			return runValidate(args[1:], stdout, stderr)
 		case "test":
-			os.Exit(runTest(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+			return runTest(args[1:], stdin, stdout, stderr)
+		default:
+			fmt.Fprintf(stderr, "bash-gate: unknown command %q\n\n%s\n", args[0], rootUsage)
+			return 2
 		}
 	}
-	os.Exit(run(os.Stdin, os.Stdout))
+	return run(stdin, stdout)
+}
+
+// runHelp prints the top-level overview, or a named command's own usage const.
+// Unknown or empty command falls back to rootUsage. Always exit 0; never reads
+// stdin or emits a hook decision.
+func runHelp(args []string, stdout io.Writer) int {
+	usage := rootUsage
+	if len(args) > 0 {
+		switch args[0] {
+		case "validate":
+			usage = validateUsage
+		case "test":
+			usage = testUsage
+		}
+	}
+	fmt.Fprintln(stdout, usage)
+	return 0
 }
 
 func run(stdin io.Reader, stdout io.Writer) int {

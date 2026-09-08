@@ -34,6 +34,13 @@ Flags:
   --stdin-json        read a full hook JSON from stdin (command and cwd from it)`
 
 func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// Help only when it's the leading token — otherwise `-h`/`--help` belong to
+	// the command under test (e.g. `test df -h`), which flag.Parse treats as a
+	// positional. stdout + exit 0 to match validate.
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprintln(stdout, testUsage)
+		return 0
+	}
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprintln(stderr, testUsage) }

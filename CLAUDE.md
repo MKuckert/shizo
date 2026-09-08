@@ -27,6 +27,9 @@ make install      # installs to $HOME/.claude-bash-rules (never clobbers rules)
 make install PREFIX=/tmp/x   # install elsewhere for verification
 ```
 
+`bash-gate help` prints a subcommand overview; `help <cmd>` (or `<cmd> --help`)
+prints that command's usage.
+
 Lint rule files before installing them:
 
 ```sh
@@ -58,7 +61,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 
 | File            | Responsibility                                             |
 | --------------- | ---------------------------------------------------------- |
-| `main.go`       | hook I/O: read JSON stdin, emit decision JSON, logging     |
+| `main.go`       | CLI dispatch + help; hook I/O: read JSON stdin, emit decision JSON, logging |
 | `policy.go`     | `decide()` — the §2 evaluation pipeline, aggregates outcomes |
 | `rules.go`      | load/parse global + project rule tiers into `config`       |
 | `match.go`      | `matchRule()` — pure argv-vs-rule token matching (`ANY`/`HAS`) |

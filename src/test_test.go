@@ -116,3 +116,22 @@ func TestTestMissingCommand(t *testing.T) {
 		t.Errorf("missing command: rc=%d err=%q", rc, errb)
 	}
 }
+
+// Leading -h/--help prints usage; but -h/--help inside the command under test
+// must reach the pipeline, not short-circuit to usage.
+func TestTestHelp(t *testing.T) {
+	setupTest(t, "allow git status ANY\n")
+
+	for _, a := range []string{"-h", "--help"} {
+		rc, out, _ := test(t, "", a)
+		if rc != 0 || !strings.Contains(out, "usage: bash-gate test") {
+			t.Errorf("leading %s: rc=%d out=%q", a, rc, out)
+		}
+	}
+
+	// `git status -h` is a real command with a -h token; it must be evaluated.
+	rc, out, _ := test(t, "", "--assume-sandboxed", "git", "status", "-h")
+	if rc != 0 || !strings.Contains(out, "decision:") || strings.Contains(out, "usage: bash-gate test") {
+		t.Errorf("trailing -h should test the command, not print usage: rc=%d out=%q", rc, out)
+	}
+}

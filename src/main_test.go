@@ -87,6 +87,48 @@ func TestLoggingFailureDoesNotChangeDecision(t *testing.T) {
 	}
 }
 
+func TestRunHelp(t *testing.T) {
+	cases := []struct {
+		args []string
+		want string // a substring unique to the expected usage
+	}{
+		{nil, "usage: bash-gate [command]"},
+		{[]string{"validate"}, "usage: bash-gate validate"},
+		{[]string{"test"}, "usage: bash-gate test"},
+		{[]string{"bogus"}, "usage: bash-gate [command]"}, // unknown -> root
+	}
+	for _, c := range cases {
+		var out bytes.Buffer
+		rc := runHelp(c.args, &out)
+		if rc != 0 {
+			t.Errorf("help %v: rc=%d, want 0", c.args, rc)
+		}
+		if !strings.Contains(out.String(), c.want) {
+			t.Errorf("help %v: output %q missing %q", c.args, out.String(), c.want)
+		}
+		// A help request must never emit a hook decision.
+		if strings.Contains(out.String(), "permissionDecision") {
+			t.Errorf("help %v leaked a hook decision: %q", c.args, out.String())
+		}
+	}
+}
+
+// An unknown subcommand must error (exit 2) instead of falling through to hook
+// mode and blocking on stdin.
+func TestDispatchUnknownCommand(t *testing.T) {
+	var out, errb bytes.Buffer
+	// stdin is a command JSON that would ALLOW in hook mode; a stray arg must
+	// not let that through — it must error without reading stdin.
+	stdin := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"git status"}}`)
+	rc := dispatch([]string{"halp"}, stdin, &out, &errb)
+	if rc != 2 || !strings.Contains(errb.String(), "unknown command") {
+		t.Errorf("unknown command: rc=%d err=%q out=%q", rc, errb.String(), out.String())
+	}
+	if strings.Contains(out.String(), "permissionDecision") {
+		t.Errorf("unknown command leaked a hook decision: %q", out.String())
+	}
+}
+
 func TestRunAutomodeDefer(t *testing.T) {
 	setupRun(t, "returntype automode\nallow git status ANY\n")
 	// allow-rule match -> emit allow decision, exit 0 (only fallthrough defers)
