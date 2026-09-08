@@ -68,14 +68,15 @@ An empty or non-JSON body, or any unexpected exit code, is a crash and denies.
 
 ### `returntype automode`
 
-The hook decides **only denials**; everything else defers to Claude Code's own
-auto-mode classifier. The allowlist becomes a pure pre-filter that strips
-known-bad before the classifier ever runs.
+The hook decides denials **and** explicit allows; only the unmatched (`ask`)
+fallthrough defers to Claude Code's own auto-mode classifier. The allowlist acts
+as a pre-filter that strips known-bad and confirms known-good before the
+classifier ever runs.
 
 | Aggregated outcome  | `decision` mode | `automode`                      |
 | ------------------- | --------------- | ------------------------------- |
 | deny-rule match     | `deny` object   | `deny` object                   |
-| allow-rule match    | `allow` object  | **defer** — no decision emitted |
+| allow-rule match    | `allow` object  | `allow` object                  |
 | neither (unmatched) | `ask` object    | **defer** — no decision emitted |
 
 A defer emits **no permission decision** and exits 0, so Claude Code proceeds to

@@ -89,10 +89,15 @@ func TestLoggingFailureDoesNotChangeDecision(t *testing.T) {
 
 func TestRunAutomodeDefer(t *testing.T) {
 	setupRun(t, "returntype automode\nallow git status ANY\n")
-	// allow-rule match -> defer sentinel, exit 0, empty JSON
+	// allow-rule match -> emit allow decision, exit 0 (only fallthrough defers)
 	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
+	if rc != 0 || decisionOf(t, out) != "allow" {
+		t.Errorf("automode allow should emit allow: rc=%d out=%q", rc, out)
+	}
+	// unmatched (ask fallthrough) -> defer sentinel, exit 0
+	rc, out = runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git log"},"cwd":"/tmp"}`)
 	if rc != 0 || out != "defer" {
-		t.Errorf("automode allow should defer: rc=%d out=%q", rc, out)
+		t.Errorf("automode unmatched should defer: rc=%d out=%q", rc, out)
 	}
 	// deny-rule match still emits the deny object on exit 2
 	setupRun(t, "returntype automode\ndeny git push ANY\n")

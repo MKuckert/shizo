@@ -64,8 +64,8 @@ func run(stdin io.Reader, stdout io.Writer) int {
 		emitDecision(stdout, outDeny, reason)
 		return 2
 	default: // allow / ask
-		if cfg.returnMode == "automode" {
-			fmt.Fprint(stdout, "defer") // §2.1: no decision, defer to Claude Code
+		if cfg.returnMode == "automode" && outcome == outAsk {
+			fmt.Fprint(stdout, "defer") // §2.1: defer only the fallthrough, not explicit allows
 			return 0
 		}
 		emitDecision(stdout, outcome, reason)

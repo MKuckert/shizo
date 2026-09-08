@@ -95,8 +95,9 @@ though `git status` would pass.
 
 The emitted object and exit code depend on the `returntype` mode — see the
 output contract in [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#output). Under
-`automode`, only `deny` is emitted as a decision; `ask`/`allow` collapse to the
-`defer` sentinel. The **log always records the true aggregated outcome**,
+`automode`, `deny` and `allow` are emitted as decisions; only the unmatched
+`ask` fallthrough collapses to the `defer` sentinel. The **log always records
+the true aggregated outcome**,
 regardless of mode.
 
 ---

@@ -99,18 +99,18 @@ Selects the output contract. At most once; absent ⇒ `decision`.
 
 - **`decision`** (default) — the hook decides every case and emits `allow`,
   `deny`, or `ask`.
-- **`automode`** — the hook emits **only** denials; `allow` and unmatched
-  (`ask`) outcomes defer to Claude Code's own auto-mode classifier. The
-  allowlist becomes a pure pre-filter that strips known-bad. Note: under
-  `automode`, `allow` no longer guarantees a prompt bypass and unmatched
-  commands no longer hit a guaranteed `ask`.
+- **`automode`** — the hook emits `deny` **and** `allow` decisions; only the
+  unmatched (`ask`) fallthrough defers to Claude Code's own auto-mode
+  classifier. Explicit allow rules still bypass the prompt; the allowlist acts
+  as a pre-filter that strips known-bad and confirms known-good, handing only
+  the unknown to the classifier.
 
 What each aggregated outcome produces:
 
 | Aggregated outcome  | `decision` (default) | `automode`                      |
 | ------------------- | -------------------- | ------------------------------- |
 | deny-rule match     | `deny` object        | `deny` object                   |
-| allow-rule match    | `allow` object       | **defer** — no decision emitted |
+| allow-rule match    | `allow` object       | `allow` object                  |
 | neither (unmatched) | `ask` object         | **defer** — no decision emitted |
 
 The wire-level details (the `defer` sentinel, exit codes) are in

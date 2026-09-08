@@ -89,7 +89,7 @@ Each decision, the choice made, and what it commits us to.
 | **Install location**  | `$HOME/.claude-bash-rules/`, engine + rules read-only                                            | `~/.claude` is writable from inside the sandbox; the gate must live where the agent cannot disable it.            |
 | **Failure handling**  | Deny with reason; log all; deny on bad exit **or** empty/non-JSON output                          | "A control that fails open when it crashes is one segfault from absent." See [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#exit-codes). |
 | **Deny signalling**   | `bash-gate` exits **2** (+ deny JSON) on deny, 0 otherwise; `gate.sh` propagates and forces exit 2 on any crash | Exit 2 is Claude Code's native blocking channel and needs no JSON parsing, so deny stays fail-closed even if the body is dropped. |
-| **Return-type modes** | `decision` (default) vs `automode`; automode emits only denials and defers the rest              | Lets the allowlist act as a pre-filter in front of the auto-mode classifier instead of owning every decision.    |
+| **Return-type modes** | `decision` (default) vs `automode`; automode emits denials and explicit allows, defers only the unmatched fallthrough | Lets the allowlist act as a pre-filter in front of the auto-mode classifier instead of owning every decision.    |
 | **Self-protection**   | Out of scope — Bash gating only                                                                  | Protecting the gate's own files is the nono profile's job, not the hook's.                                        |
 
 ---
@@ -126,10 +126,10 @@ Stated, not solved. These are the known edges of a fail-closed static gate:
   but it is not purely tightening: a project `allow` can widen an unmatched
   (`ask`) command to `allow`, bypassing the prompt. A hostile diff can also add
   confusing denials.
-- **`automode` delegates every non-deny decision** to Claude Code's classifier,
-  so under it `allow` no longer guarantees a prompt bypass and unknown commands
-  no longer hit a guaranteed `ask`. The human backstop is only as strong as that
-  classifier.
+- **`automode` delegates the unmatched (`ask`) fallthrough** to Claude Code's
+  classifier, so under it unknown commands no longer hit a guaranteed `ask`.
+  Explicit `deny` and `allow` rules are still honoured. The human backstop for
+  the unknown is only as strong as that classifier.
 - **Assignment/`ParamExp` denial has a usability cost.** `git commit -m "$MSG"`
   and `FOO=1 make` are denied. Expect friction here first.
 - **Hook timeout fails open**, and **logs are tamperable** from inside the
