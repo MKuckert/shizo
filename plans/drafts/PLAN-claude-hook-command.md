@@ -18,17 +18,12 @@ already exists as the one-screen overview to print when no command is given.
 `dispatch` already errors on unknown subcommands; this just moves the arg-less
 default off "block on stdin" and onto "print usage".
 
-## The one decision: what arg-less does now
+## Decision: arg-less prints usage, `claude-hook` runs the gate
 
-Arg-less must stop reading stdin. Two ways it can go:
-
-- **A. Arg-less prints `rootUsage`, exit 0; `claude-hook` runs the gate (pick).**
-  Symmetric with `help`. Discoverable: a bare run tells you `claude-hook` is the
-  hook entrypoint. No stdin read on the no-arg path.
-- **B. Keep arg-less as hook mode, add `claude-hook` as an alias.** Solves
-  nothing — the hang stays. Rejected.
-
-## Pick: A
+Arg-less must stop reading stdin. **Settled on A:** a bare `bash-gate` prints
+`rootUsage` and exits 0; the gate moves behind the explicit `claude-hook`
+subcommand. Symmetric with `help`, discoverable (a bare run names `claude-hook`
+as the hook entrypoint), and no stdin read on the no-arg path.
 
 ## Breaking change (must land together)
 

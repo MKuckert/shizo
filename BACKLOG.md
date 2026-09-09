@@ -1,7 +1,7 @@
-- [ ] [Enforce readonly project-level rules in sandbox?](plans/drafts/PLAN-readonly-project-rules.md)
+- [ ] [Better DX: No arg-less calling of `bash-gate`, so app doesn't wait on stdin by default. Use `bash-gate claude-hook` instead.](plans/drafts/PLAN-claude-hook-command.md)
+- [ ] [Rule attestation: detect tampered rule tiers](plans/drafts/PLAN-rule-attestation.md)
 - [ ] [Add self-testing for sandbox env: global rules readable but not writable, logs writable, …](plans/drafts/PLAN-sandbox-selftest.md)
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [ ] [Add a default `nono` profile as an example](plans/drafts/PLAN-nono-profile-example.md)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
 - [ ] [Add a Language Server?](plans/drafts/PLAN-language-server.md) https://share.gemini.google/oEPdHxfRQHPJ
-- [ ] [Better DX: No arg-less calling of `bash-gate`, so app doesn't wait on stdin by default. Use `bash-gate claude-hook` instead.](plans/drafts/PLAN-claude-hook-command.md)
