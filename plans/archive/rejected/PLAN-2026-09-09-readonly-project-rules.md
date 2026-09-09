@@ -1,6 +1,37 @@
-# Enforce read-only project-level rules in the sandbox?
+# Enforce read-only project-level rules in the sandbox? — NOT IMPLEMENTABLE
 
-> TODO: "Enforce readonly project-level rules in sandbox?"
+> Superseded by [`plans/drafts/PLAN-rule-attestation.md`](plans/drafts/PLAN-rule-attestation.md).
+> The picked approach (A: read-only project tier via the nono profile) cannot be
+> built. We pivot from *enforcement* to *detection* (attestation). Full feasibility
+> study: [`docs/research/nono-readonly-project-rules.md`](docs/research/nono-readonly-project-rules.md).
+
+## Why this can't be implemented
+
+The goal was a file that is **readable but not writable** inside a writable
+workdir. nono cannot express that (verified empirically on macOS, nono 0.75.0):
+
+- **No write-scoped deny.** nono's filesystem model is a *union* of positive
+  grants (`allow`=rw, `read`=ro, `write`=wo) plus one **absolute** `deny`. There
+  is no "deny write but keep read" for a subpath.
+- **A read grant doesn't downgrade a broader write grant.** Layering `read_file`
+  on top of an `allow`ed workdir leaves the file read **+ write** — grants only
+  ever widen (union), never subtract.
+- **`deny` kills read too, which is self-defeating.** `deny **/.claude-bash-rules`
+  does block writes (and is even recreate-proof on macOS), but it also removes
+  *read* — and bash-gate runs *inside* the sandbox, so it could no longer load
+  the project tier at all. The feature would silently disable itself in exactly
+  the environment that matters.
+- **The only readable+unwritable shape inverts the workdir** (grant the dir
+  read-only, carve writable paths back), which abandons the "workdir stays
+  writable" requirement — impractical for a general agent workdir.
+- **Linux/WSL2 is worse.** Even the self-defeating `deny` path is a hard startup
+  error on Linux (Landlock can't deny-within-allow) without supervised mode, and
+  its recreate-proofing is macOS-only.
+
+Option C (move rules to the read-only install root) *would* work but loses the
+repo-local ergonomic (rules must travel committed in the checkout). So both
+enforcement options are out; the successor plan detects tampering instead of
+preventing writes.
 
 ## Problem
 
@@ -42,7 +73,12 @@ is a profile concern, not a hook-pipeline change.
   The `?` leans here — but ask→allow widening is a real bypass, so A is cheap
   insurance.
 
-## Pick: A
+## Pick: A — REJECTED
+
+A is not implementable (see "Why this can't be implemented" above); B and C are
+also out (B is unreliable at runtime; C loses repo-local rules). Superseded by
+[`plans/drafts/PLAN-rule-attestation.md`](plans/drafts/PLAN-rule-attestation.md).
+The analysis below is kept for provenance.
 
 ## Changes
 
