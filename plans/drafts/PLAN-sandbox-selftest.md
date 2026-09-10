@@ -27,17 +27,16 @@ write), dir-write by create+remove a `.probe-<pid>` file.
 | `global/`, `engine/` not writable | create+remove `.probe-<pid>` | fail   |
 | `logs/` writable             | create+remove `.probe-<pid>`   | ok     |
 
-## Options
+## Decision
 
-- **A. `bash-gate selfcheck` subcommand (pick).** Runs the probes, PASS/FAIL per
-  check, exit 0/1. Path logic (`installRoot`/`logDir`) already lives in the
-  binary → one source of truth, probe helpers unit-testable.
-- **B. shell script in `engine/`.** Duplicates path logic, harder to test.
-  Rejected.
-- **C. always-on in `gate.sh`.** Latency + fragile deny on every call. `gate.sh`
-  already does the one cheap essential check (logs writable). Rejected.
+`bash-gate selfcheck` subcommand. Runs the probes, PASS/FAIL per check, exit
+0/1. Path logic (`installRoot`/`logDir`) already lives in the binary → one
+source of truth, probe helpers unit-testable.
+Include a "config loads clean" check, e.g. use `validate` for the default paths.
 
-## Pick: A
+Rejected: a shell script in `engine/` (duplicates path logic, harder to test),
+and always-on checks in `gate.sh` (latency + fragile deny on every call —
+`gate.sh` already does the one cheap essential check: logs writable).
 
 ## Changes
 
@@ -49,8 +48,3 @@ write), dir-write by create+remove a `.probe-<pid>` file.
   full sandbox behavior only runs inside nono; unit-test the primitives).
 - Docs: `README.md` "Self-check" (must run inside the sandbox; mode bits aren't
   the signal), pointer from `ARCHITECTURE.md` Install/Self-protection.
-
-## Open
-
-- Include a "config loads clean" check, or leave rule health to `validate`? Lean:
-  filesystem shape only.
