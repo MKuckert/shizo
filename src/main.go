@@ -28,19 +28,21 @@ var version = "dev"
 // rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
 // It indexes the operator subcommands; each owns its own detailed usage const.
 const rootUsage = `bash-gate — a Claude Code PreToolUse hook that allowlists Bash
-commands at subcommand granularity. With no arguments it runs as the hook:
-reads hook JSON on stdin, emits a decision. The subcommands below are
-operator-only and never touch the hook pipeline.
+commands at subcommand granularity. "claude-hook" is the hook entrypoint: it
+reads hook JSON on stdin and emits a decision. Every other subcommand is
+operator-only and never touches the hook pipeline; with no arguments this
+prints usage and exits (it never reads stdin).
 
 usage: bash-gate [command] [args]
 
 Commands:
-  (none)     hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
-  validate   lint rule files (all errors + semantic warnings)
-  test       dry-run a command through the evaluation pipeline
-  help [cmd] show this overview, or detailed usage for a command
-             (aliases: --help, -h, -?)
-  --version  print the version (alias: -v)
+  claude-hook hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
+  validate    lint rule files (all errors + semantic warnings)
+  test        dry-run a command through the evaluation pipeline
+  help [cmd]  show this overview, or detailed usage for a command
+              (aliases: --help, -h, -?)
+  --version   print the version (alias: -v)
+  (none)      → help
 
 Rules live in $CLAUDE_BASH_RULES_DIR (default ~/.claude-bash-rules): the global
 tier under global/rules, an optional per-project tier at <cwd>/.claude-bash-rules.
@@ -50,12 +52,15 @@ func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-// dispatch routes operator subcommands; with no args it runs as the hook (the
-// arg-less default gate.sh invokes). An unrecognised first arg is a mistyped
-// subcommand, not hook input, so it errors rather than blocking on stdin.
+// dispatch routes operator subcommands; "claude-hook" is the hook entrypoint
+// (what gate.sh invokes). Arg-less prints usage and exits — it never reads
+// stdin. An unrecognised first arg is a mistyped subcommand, not hook input,
+// so it errors rather than blocking on stdin.
 func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
 		switch args[0] {
+		case "claude-hook":
+			return runClaudeHook(stdin, stdout)
 		case "--version", "-v":
 			fmt.Fprintln(stdout, "bash-gate "+version)
 			return 0
@@ -70,7 +75,7 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	return run(stdin, stdout)
+	return runHelp(nil, stdout)
 }
 
 // runHelp prints the top-level overview, or a named command's own usage const.
@@ -80,6 +85,8 @@ func runHelp(args []string, stdout io.Writer) int {
 	usage := rootUsage
 	if len(args) > 0 {
 		switch args[0] {
+		case "claude-hook":
+			usage = claudeHookUsage
 		case "validate":
 			usage = validateUsage
 		case "test":
@@ -90,7 +97,18 @@ func runHelp(args []string, stdout io.Writer) int {
 	return 0
 }
 
-func run(stdin io.Reader, stdout io.Writer) int {
+// claudeHookUsage documents the hook entrypoint invoked by gate.sh. This is
+// the only subcommand that reads stdin and logs decisions.
+const claudeHookUsage = `bash-gate claude-hook — the Claude Code PreToolUse hook entrypoint.
+
+usage: bash-gate claude-hook
+
+Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
+evaluates the command against the rule tiers, and emits a decision object on
+stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
+(see $CLAUDE_BASH_RULES_DIR/logs).`
+
+func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
 	raw, _ := io.ReadAll(stdin)
 	in, inErr := parseInput(raw)
 

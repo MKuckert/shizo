@@ -19,7 +19,7 @@ fi
 
 input=$(cat)                                   # drain the hook JSON once
 [ -n "$GATE_DEBUG" ] && printf '%s\n' "$input" >>"$log/stdin.log" 2>/dev/null
-out=$(printf '%s' "$input" | "$dir/bash-gate" 2>>"$log/gate.log")
+out=$(printf '%s' "$input" | "$dir/bash-gate" claude-hook 2>>"$log/gate.log")
 rc=$?
 
 case "$rc:$out" in

@@ -26,7 +26,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 func runWith(t *testing.T, input string) (int, string) {
 	t.Helper()
 	var out bytes.Buffer
-	rc := run(strings.NewReader(input), &out)
+	rc := runClaudeHook(strings.NewReader(input), &out)
 	return rc, out.String()
 }
 
@@ -93,6 +93,7 @@ func TestRunHelp(t *testing.T) {
 		want string // a substring unique to the expected usage
 	}{
 		{nil, "usage: bash-gate [command]"},
+		{[]string{"claude-hook"}, "usage: bash-gate claude-hook"},
 		{[]string{"validate"}, "usage: bash-gate validate"},
 		{[]string{"test"}, "usage: bash-gate test"},
 		{[]string{"bogus"}, "usage: bash-gate [command]"}, // unknown -> root
@@ -126,6 +127,41 @@ func TestDispatchUnknownCommand(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "permissionDecision") {
 		t.Errorf("unknown command leaked a hook decision: %q", out.String())
+	}
+}
+
+// dispatch("claude-hook", ...) must behave exactly as arg-less run() did
+// before this change: hook JSON on stdin -> a decision.
+func TestDispatchClaudeHook(t *testing.T) {
+	setupRun(t, "allow git status ANY\n")
+	var out, errb bytes.Buffer
+	stdin := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
+	rc := dispatch([]string{"claude-hook"}, stdin, &out, &errb)
+	if rc != 0 || decisionOf(t, out.String()) != "allow" {
+		t.Errorf("claude-hook allow: rc=%d out=%s", rc, out.String())
+	}
+}
+
+// failingReader errors on any Read; used to prove a code path never reads stdin.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	panic("stdin was read")
+}
+
+// Arg-less must print usage and exit 0 without ever touching stdin (it must
+// not block waiting for hook JSON that will never arrive).
+func TestDispatchArglessNeverReadsStdin(t *testing.T) {
+	var out, errb bytes.Buffer
+	rc := dispatch(nil, failingReader{}, &out, &errb)
+	if rc != 0 {
+		t.Errorf("arg-less: rc=%d, want 0", rc)
+	}
+	if !strings.Contains(out.String(), "usage: bash-gate [command]") {
+		t.Errorf("arg-less: output %q missing usage", out.String())
+	}
+	if strings.Contains(out.String(), "permissionDecision") {
+		t.Errorf("arg-less leaked a hook decision: %q", out.String())
 	}
 }
 

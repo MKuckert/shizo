@@ -65,6 +65,27 @@ allow; an unmatched command yields `ask`.
 **See [`docs/RULES.md`](docs/RULES.md) for the full DSL reference** — matching
 semantics, directives, command resolution, and worked examples.
 
+## Hook entrypoint (`claude-hook` / `gate.sh`)
+
+`claude-hook` is the subcommand Claude Code actually drives: it reads the hook
+JSON on stdin (`tool_input.command`, `cwd`, `session_id`), evaluates it through
+the same pipeline as `test`, and emits a decision object — exit `2` for deny,
+`0` for allow/ask.
+
+```sh
+echo '{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"."}' \
+  | dist/bash-gate claude-hook
+```
+
+It's never invoked directly in practice — `gate.sh` (installed as the hook
+`command`, see above) wraps it and turns every fail-open gap (crash, timeout,
+empty/non-JSON output) into a blocking deny, and refuses to run at all if its
+log directory isn't writable. This is also the only mode that logs decisions,
+to `$HOME/.claude-bash-rules/logs/YYYY-MM-DD.jsonl`.
+
+**See [`docs/CLAUDE_CODE_HOOKS.md`](docs/CLAUDE_CODE_HOOKS.md)** for the full
+I/O contract, `returntype automode`, exit codes, and the `gate.sh` source.
+
 ## Validate
 
 Lint rule files before installing them — a build-time check, completely separate
