@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "name": "bash-gate-example",
+    "version": "1",
+    "description": "Deployment example for wrapping a bash-gate-gated agent. See README.md#example-sandbox-profile before use."
+  },
+  "workdir": {
+    "access": "readwrite"
+  },
+  "filesystem": {
+    "read": ["~/.claude-bash-rules"],
+    "allow": ["~/.claude-bash-rules/logs", "<AGENT_WORKDIR>"]
+  },
+  "network": {
+    "block": true
+  },
+  "environment": {
+    "allow_vars": ["HOME", "PATH", "SHELL", "TERM", "LANG"]
+  }
+}

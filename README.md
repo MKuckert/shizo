@@ -55,6 +55,29 @@ The sandbox must grant **read** (deliberately not write) on
 `$HOME/.claude-bash-rules/`. Without it the hook cannot load its rules and
 `gate.sh` denies everything.
 
+## Example sandbox profile
+
+[`conf/nono-profile.example.json`](conf/nono-profile.example.json) is a
+deployment template for wrapping the agent in [`nono`](https://nono.sh/), an OS sandbox. It's standalone (no
+`extends`) so it's portable across machines; replace `<AGENT_WORKDIR>` with
+the repo path the agent operates on before use.
+
+| Field                          | Value                                        | Why                                                                 |
+| ------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| `filesystem.read`               | `~/.claude-bash-rules`                        | Lets the hook load its rules — read only, so the agent can't rewrite them. |
+| `filesystem.allow`              | `~/.claude-bash-rules/logs`, `<AGENT_WORKDIR>` | Readwrite only where the agent needs to write: decision logs and its own workdir. |
+| `workdir.access`                | `readwrite`                                   | The agent's working directory itself.                               |
+| `network.block`                 | `true`                                        | Default-deny network; add `network.allow_domain` entries as needed. |
+| `environment.allow_vars`        | minimal set                                   | Strip everything not explicitly needed by the agent or `bash-gate`. |
+
+`$HOME/.claude-bash-rules/engine/` and `global/rules` stay outside `allow`,
+so they're readable but never writable from inside the sandbox — this is
+what `sandbox nono` (see [`docs/RULES.md`](docs/RULES.md)) assumes.
+
+This is a template, not `.sandbox/profile.template.json` (that one is
+machine-specific, used to develop `bash-gate` itself — see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
 ## Rules
 
 Rules are a line-oriented, inert DSL: `allow`/`deny` rules matched against argv

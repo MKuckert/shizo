@@ -1,4 +1,3 @@
-- [ ] [Add a default `nono` profile as an example](plans/drafts/PLAN-nono-profile-example.md)
 - [ ] [Add self-testing for sandbox env: global rules readable but not writable, logs writable, …](plans/drafts/PLAN-sandbox-selftest.md)
 - [ ] [Rule attestation: detect tampered rule tiers](plans/drafts/PLAN-rule-attestation.md)
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
