@@ -96,6 +96,7 @@ func TestRunHelp(t *testing.T) {
 		{[]string{"claude-hook"}, "usage: bash-gate claude-hook"},
 		{[]string{"validate"}, "usage: bash-gate validate"},
 		{[]string{"test"}, "usage: bash-gate test"},
+		{[]string{"selfcheck"}, "usage: bash-gate selfcheck"},
 		{[]string{"bogus"}, "usage: bash-gate [command]"}, // unknown -> root
 	}
 	for _, c := range cases {

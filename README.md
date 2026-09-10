@@ -149,6 +149,22 @@ gate denies everything — pass `--assume-sandboxed` to exercise the rules; a
 sandbox-gate-only deny prints a hint pointing at that flag. `--json` emits the
 machine-readable log-line shape instead of the human table.
 
+## Self-check
+
+Verify the deployed sandbox profile actually delivers the read/write shape
+the fail-closed model rests on — `engine/` and `global/rules` read-only,
+`logs/` writable. **Must be run inside the sandbox**: nono enforces at the
+syscall layer, so file mode bits don't reflect what's actually allowed; each
+check attempts the real operation (open-for-write, create+remove a probe
+file) instead of inspecting permissions. Non-destructive — `global/rules` is
+never truncated.
+
+```sh
+dist/bash-gate selfcheck             # table output, exit 0/1
+dist/bash-gate selfcheck --json      # machine-readable
+dist/bash-gate selfcheck --root DIR  # check a different install root
+```
+
 ## Kill switch
 
 The rules directory is read-only from inside the sandbox and a load failure

@@ -39,6 +39,7 @@ Commands:
   claude-hook hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
   validate    lint rule files (all errors + semantic warnings)
   test        dry-run a command through the evaluation pipeline
+  selfcheck   verify the sandbox enforces the install's read/write shape
   help [cmd]  show this overview, or detailed usage for a command
               (aliases: --help, -h, -?)
   --version   print the version (alias: -v)
@@ -70,6 +71,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runValidate(args[1:], stdout, stderr)
 		case "test":
 			return runTest(args[1:], stdin, stdout, stderr)
+		case "selfcheck":
+			return runSelfcheck(args[1:], stdout, stderr)
 		default:
 			fmt.Fprintf(stderr, "bash-gate: unknown command %q\n\n%s\n", args[0], rootUsage)
 			return 2
@@ -91,6 +94,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = validateUsage
 		case "test":
 			usage = testUsage
+		case "selfcheck":
+			usage = selfcheckUsage
 		}
 	}
 	fmt.Fprintln(stdout, usage)
