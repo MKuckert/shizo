@@ -28,6 +28,10 @@ Steps run top to bottom; the first to reach a verdict wins.
    everything); the project tier is **optional**. Rules load before the sandbox
    gate because the sandbox mode lives in them. Tier semantics, directive
    handling, and the malformed-line rule are in [`RULES.md §1`](RULES.md#1-tiers-and-file-locations).
+   Each present tier must also match its operator-recorded attestation (hash
+   of the normalized rules, plus a live-`PATH` snapshot for the global tier) —
+   any missing record or mismatch denies everything, same as a load error. See
+   [`RULES.md §10`](RULES.md#10-attestation).
 
 3. **Sandbox gate.** Under `sandbox nono` (the default) with `NONO_CAP_FILE`
    unset → `deny`. `sandbox dangerously-none` drops the gate. See

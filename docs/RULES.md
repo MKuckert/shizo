@@ -327,3 +327,48 @@ deny git commit ANY
 The project tier's `deny` rules join the global denies; its `allow` rules join
 the global allows (and can widen `ask`→`allow`, per §1) but can never override a
 global `deny`.
+
+---
+
+## 10. Attestation
+
+Both tiers are files, and the project tier lives inside the writable workdir —
+so it's agent/attacker-editable (§1). Attestation doesn't make a tier
+read-only; it **detects** when the tier a human approved has changed, and
+fails closed when it has.
+
+**What gets attested.** `bash-gate attest` normalizes a tier (parse, drop
+comments/whitespace, sort rules, canonical-serialize) and `sha256`s the
+result, then writes a record under `$CLAUDE_BASH_RULES_DIR/attestations/`:
+
+```
+bash-gate attest --global   # attest the resolved global tier
+bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.claude-bash-rules)
+```
+
+Because normalization drops comments/whitespace/rule-order, cosmetic edits
+don't force a re-attest — only a change that alters the parsed rule set does.
+The global record additionally snapshots the live `PATH` intersected with the
+trust-dir set (`normalized-path`), in `PATH` order as changes to `PATH` could affect command resolution.
+
+**What the hook checks.** Every load (`loadConfig`, §2 step 2) recomputes each
+present tier's hash and compares it against its record. All must hold, or
+**every command is denied** until re-attested — same fail-closed shape as a
+load error:
+
+1. the global tier's record exists and its hash matches, **and**
+2. if a project tier is present, its record exists and its hash matches,
+   **and**
+3. the live normalized-`PATH` matches the global record's snapshot.
+
+No project file present ⇒ nothing to check for it ⇒ normal global-only
+operation. A record whose `schema`/`norm-version` bash-gate doesn't recognise
+is treated as a mismatch (re-attest), never a silent pass.
+
+**Scope.** This is whole-tier trust, not a diff review: a project `deny`
+(tightening) still requires attestation, same as a project `allow`. It cannot
+distinguish a repo you trust from a hostile one — it forces a human `attest`
+either way, once per machine. Its value for a shipped `.claude-bash-rules` is
+"no project rule takes effect until a human looked at it here." It is only as
+strong as the read-only grant on `$CLAUDE_BASH_RULES_DIR` in the sandbox
+profile — see `docs/ARCHITECTURE.md`.

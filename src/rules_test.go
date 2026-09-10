@@ -38,6 +38,7 @@ func TestMissingGlobalDenyAll(t *testing.T) {
 func TestMissingProjectGlobalOnly(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", validGlobal)
+	attestGlobal(t, dir, validGlobal)
 	cfg := loadConfig(g, filepath.Join(dir, "no-project"))
 	if cfg.denyAll {
 		t.Fatal("missing project must not deny all")
@@ -59,8 +60,10 @@ func TestMalformedLineDenyAll(t *testing.T) {
 func TestProjectLooseningIgnored(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", validGlobal)
-	proj := writeFile(t, dir, ".claude-bash-rules",
-		"trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n")
+	attestGlobal(t, dir, validGlobal)
+	projRules := "trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n"
+	proj := writeFile(t, dir, ".claude-bash-rules", projRules)
+	attestProject(t, dir, proj, projRules)
 	cfg := loadConfig(g, proj)
 	if cfg.denyAll {
 		t.Fatal("project loosening should be ignored, not deny-all")
@@ -87,12 +90,16 @@ func TestProjectLooseningIgnored(t *testing.T) {
 func TestReturntype(t *testing.T) {
 	dir := t.TempDir()
 	// valid automode
-	g := writeFile(t, dir, "a/rules", "returntype automode\nsandbox nono\nallow ls ANY\n")
+	body := "returntype automode\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "a/rules", body)
+	attestGlobal(t, dir, body)
 	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.returnMode != "automode" {
 		t.Errorf("automode: %+v", cfg)
 	}
 	// absent => decision
-	g = writeFile(t, dir, "b/rules", "sandbox nono\nallow ls ANY\n")
+	body = "sandbox nono\nallow ls ANY\n"
+	g = writeFile(t, dir, "b/rules", body)
+	attestGlobal(t, dir, body)
 	if cfg := loadConfig(g, ""); cfg.returnMode != "decision" {
 		t.Error("absent returntype should default to decision")
 	}
@@ -111,12 +118,16 @@ func TestReturntype(t *testing.T) {
 func TestSandbox(t *testing.T) {
 	dir := t.TempDir()
 	// explicit nono
-	g := writeFile(t, dir, "a/rules", "sandbox nono\nallow ls ANY\n")
+	body := "sandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "a/rules", body)
+	attestGlobal(t, dir, body)
 	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "nono" {
 		t.Errorf("nono: %+v", cfg)
 	}
 	// explicit dangerously-none
-	g = writeFile(t, dir, "b/rules", "sandbox dangerously-none\nallow ls ANY\n")
+	body = "sandbox dangerously-none\nallow ls ANY\n"
+	g = writeFile(t, dir, "b/rules", body)
+	attestGlobal(t, dir, body)
 	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "dangerously-none" {
 		t.Errorf("dangerously-none: %+v", cfg)
 	}

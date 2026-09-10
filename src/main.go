@@ -38,6 +38,7 @@ usage: bash-gate [command] [args]
 Commands:
   claude-hook hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
   validate    lint rule files (all errors + semantic warnings)
+  attest      record operator approval of a rule tier (required before it is trusted)
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
   help [cmd]  show this overview, or detailed usage for a command
@@ -69,6 +70,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runHelp(args[1:], stdout)
 		case "validate":
 			return runValidate(args[1:], stdout, stderr)
+		case "attest":
+			return runAttest(args[1:], stdout, stderr)
 		case "test":
 			return runTest(args[1:], stdin, stdout, stderr)
 		case "selfcheck":
@@ -92,6 +95,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = claudeHookUsage
 		case "validate":
 			usage = validateUsage
+		case "attest":
+			usage = attestUsage
 		case "test":
 			usage = testUsage
 		case "selfcheck":

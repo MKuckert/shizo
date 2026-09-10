@@ -63,11 +63,13 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 | --------------- | ---------------------------------------------------------- |
 | `main.go`       | CLI dispatch + help; hook I/O: read JSON stdin, emit decision JSON, logging |
 | `policy.go`     | `decide()` — the §2 evaluation pipeline, aggregates outcomes |
-| `rules.go`      | load/parse global + project rule tiers into `config`       |
+| `rules.go`      | load/parse global + project rule tiers into `config`; wires the attestation verdict into `loadConfig` |
 | `match.go`      | `matchRule()` — pure argv-vs-rule token matching (`ANY`/`HAS`) |
 | `extract.go`    | argv extraction from the parsed AST; `<subst>`/`<var>` tokens |
 | `resolve.go`    | command resolution: safe builtins, uncond-deny, PATH lookup |
 | `validate.go`   | `bash-gate validate` — operator-only rule linter (all errors + semantic warnings) |
+| `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
+| `attest.go`     | `bash-gate attest` — operator-only; writes/reads `.attest` records |
 | `gate.sh`       | wrapper installed as the hook `command`; fails closed      |
 | `conf/`         | starter global rules + example Claude settings             |
 

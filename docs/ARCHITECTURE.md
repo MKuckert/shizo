@@ -122,10 +122,19 @@ Stated, not solved. These are the known edges of a fail-closed static gate:
 - **Matching is pre-expansion.** Glob, brace, and tilde expansion happen at
   runtime, after matching. `rm {a,b}` and `--ext-dif?` are literal tokens to the
   parser, so `HAS` rules and any path-shaped matching can be evaded.
-- **The project tier is agent-editable.** It can never override a global `deny`,
-  but it is not purely tightening: a project `allow` can widen an unmatched
-  (`ask`) command to `allow`, bypassing the prompt. A hostile diff can also add
-  confusing denials.
+- **The project tier is agent-editable — detected via attestation, not
+  enforced.** It can never override a global `deny`, but it is not purely
+  tightening: a project `allow` can widen an unmatched (`ask`) command to
+  `allow`, bypassing the prompt. A hostile diff can also add confusing
+  denials. `bash-gate attest` records a human-approved hash of each tier
+  (`RULES.md §10`); `loadConfig` recomputes it on every load and denies
+  everything on any divergence, so neither in-session tampering nor a
+  hostile-shipped `.claude-bash-rules` takes effect until attested on this
+  machine. The trust anchor is the read-only grant on
+  `$CLAUDE_BASH_RULES_DIR` in the sandbox profile — a profile that makes any
+  ancestor of that path writable (the "ancestor-grant footgun",
+  `nono-profile-guide.md:1143`) makes the attestation store writable in-sandbox
+  and defeats this entirely.
 - **`automode` delegates the unmatched (`ask`) fallthrough** to Claude Code's
   classifier, so under it unknown commands no longer hit a guaranteed `ask`.
   Explicit `deny` and `allow` rules are still honoured. The human backstop for

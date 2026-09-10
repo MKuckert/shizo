@@ -20,6 +20,7 @@ func setupTest(t *testing.T, rulesBody string) string {
 	t.Setenv("PATH", bin)
 	t.Setenv("NONO_CAP_FILE", "") // gate off by default; --assume-sandboxed flips it
 	t.Setenv("HOME", t.TempDir())
+	attestGlobal(t, root, body)
 	return bin
 }
 
@@ -53,7 +54,9 @@ func TestTestAllowAskDeny(t *testing.T) {
 func TestTestCwdPicksProjectTier(t *testing.T) {
 	setupTest(t, "allow git status ANY\n")
 	proj := t.TempDir()
-	writeFile(t, proj, ".claude-bash-rules", "deny git status ANY\n")
+	projBody := "deny git status ANY\n"
+	projPath := writeFile(t, proj, ".claude-bash-rules", projBody)
+	attestProject(t, installRoot(), projPath, projBody)
 
 	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", proj, "git", "status")
 	if rc != 2 || !strings.Contains(out, "decision: deny") {

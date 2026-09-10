@@ -26,14 +26,17 @@ func denyAllConfig(reason string) *config {
 
 // loadConfig reads the global tier (required) and project tier (optional).
 // Any load/parse failure yields a deny-all config with a reason (§2 step 2).
+// A tier that fails attestation (unattested, changed since attest, or a live
+// PATH that no longer matches the attested trust-dir snapshot) also yields
+// deny-all — see attest_verify.go and plans/drafts/PLAN-rule-attestation.md.
 func loadConfig(globalPath, projectPath string) *config {
 	cfg := &config{returnMode: "decision"}
 
-	data, err := os.ReadFile(globalPath)
+	globalData, err := os.ReadFile(globalPath)
 	if err != nil {
 		return denyAllConfig("global rules unreadable (" + globalPath + "): " + err.Error())
 	}
-	if reason, ok := parseTier(cfg, string(data), false); !ok {
+	if reason, ok := parseTier(cfg, string(globalData), false); !ok {
 		return denyAllConfig(reason)
 	}
 	// sandbox is required in the global tier — absence fails closed (§3).
@@ -41,9 +44,13 @@ func loadConfig(globalPath, projectPath string) *config {
 		return denyAllConfig("global tier must declare a sandbox directive (nono or dangerously-none)")
 	}
 
+	var projectData []byte
+	projectPresent := false
 	if projectPath != "" {
 		data, err := os.ReadFile(projectPath)
 		if err == nil {
+			projectPresent = true
+			projectData = data
 			if reason, ok := parseTier(cfg, string(data), true); !ok {
 				return denyAllConfig(reason)
 			}
@@ -52,7 +59,52 @@ func loadConfig(globalPath, projectPath string) *config {
 		}
 	}
 
+	if reason := verifyAttestation(globalData, projectPath, projectData, projectPresent); reason != "" {
+		return denyAllConfig(reason)
+	}
+
 	return cfg
+}
+
+// verifyAttestation checks the loaded tiers against operator-recorded
+// attestations. Trusted iff the global record matches and, when a project
+// tier is present, its record also matches and the live normalized-PATH still
+// matches the global record's snapshot. No project file -> nothing to verify
+// for it (§ of the plan: "No project file ⇒ nothing to attest").
+func verifyAttestation(globalData []byte, projectPath string, projectData []byte, projectPresent bool) string {
+	root := installRoot()
+
+	gNorm, reason, ok := normalizeTier(string(globalData), false)
+	if !ok {
+		return "global rules failed to normalize for attestation: " + reason
+	}
+	gRecord, err := readAttestRecord(globalAttestPath(root))
+	if err != nil {
+		return "global rules not attested (" + err.Error() + "); run `bash-gate attest --global`"
+	}
+	if reason := checkRecord("global", gNorm, gRecord); reason != "" {
+		return reason
+	}
+	if live := normalizedPath(os.Getenv("PATH"), gNorm.trusted); gRecord["normalized-path"] != live {
+		return "PATH (trust-dir subset) changed since global attestation; re-attest with `bash-gate attest --global`"
+	}
+
+	if !projectPresent {
+		return ""
+	}
+	abs, err := filepath.Abs(projectPath)
+	if err != nil {
+		return "project rules path: " + err.Error()
+	}
+	pNorm, reason, ok := normalizeTier(string(projectData), true)
+	if !ok {
+		return "project rules failed to normalize for attestation: " + reason
+	}
+	pRecord, err := readAttestRecord(projectAttestPath(root, abs))
+	if err != nil {
+		return "project rules not attested (" + err.Error() + "); run `bash-gate attest`"
+	}
+	return checkRecord("project", pNorm, pRecord)
 }
 
 // tierState carries the per-file "seen" flags across parseLine calls: rules must

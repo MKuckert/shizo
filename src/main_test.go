@@ -20,6 +20,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 	t.Setenv("PATH", bin)
 	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
 	t.Setenv("HOME", t.TempDir()) // isolate logs
+	attestGlobal(t, root, body)
 	return bin
 }
 

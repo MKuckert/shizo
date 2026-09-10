@@ -44,6 +44,7 @@ Then register the hook in `~/.claude/settings.json`:
 | `$HOME/.claude-bash-rules/engine/`      | read-only             | `bash-gate`, `gate.sh`         |
 | `$HOME/.claude-bash-rules/global/rules` | read-only             | global rule tier               |
 | `$HOME/.claude-bash-rules/logs/`        | writable              | `YYYY-MM-DD.jsonl` per decision |
+| `$HOME/.claude-bash-rules/attestations/`| read-only             | `.attest` records (see Attest)  |
 | `<cwd>/.claude-bash-rules`              | repo, writable        | project tier (optional)        |
 
 `$CLAUDE_BASH_RULES_DIR` overrides the install root; the global rules are then
@@ -130,6 +131,29 @@ allow rules fully shadowed by a deny, missing/non-directory `trust` paths, proje
 tier directives that will be ignored, and duplicate rules. Output is
 `file:line: error|warning: message`. Exit `0` = no errors (warnings allowed),
 `1` = errors, `2` = usage.
+
+## Attest
+
+The project tier lives in the writable workdir, so it's agent/attacker-editable.
+`attest` records operator approval of a tier's current content (a hash of its
+normalized rules); the hook recomputes that hash on every load and **denies
+everything** if it doesn't match — same fail-closed shape as a load error. Run
+outside the sandbox, after reviewing the rules (e.g. with `validate`):
+
+```sh
+dist/bash-gate attest --global   # attest the resolved global tier
+dist/bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.claude-bash-rules)
+```
+
+Cosmetic edits (comments, whitespace, rule order) don't force a re-attest —
+only a change that alters the parsed rule set does. `make install` auto-attests
+the starter global rules on a fresh install; a later edit to the global tier
+needs an explicit re-attest. See [`docs/RULES.md §10`](docs/RULES.md#10-attestation).
+
+The global record also snapshots the live `PATH`∩trust-dirs, so if the agent's
+runtime `PATH` differs from the shell you attested in, the hook will deny
+everything with a `PATH ... changed since global attestation` reason — re-run
+`bash-gate attest --global` in (or matching) that environment.
 
 ## Test
 

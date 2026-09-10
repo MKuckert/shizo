@@ -58,8 +58,10 @@ install: build
 	if [ ! -f "$(GLOBAL)/rules" ]; then \
 		cp conf/global-rules.starter "$(GLOBAL)/rules"; \
 		echo "installed starter rules -> $(GLOBAL)/rules"; \
+		CLAUDE_BASH_RULES_DIR="$(PREFIX)" "$(ENGINE)/bash-gate" attest --global; \
 	else \
 		echo "kept existing rules  -> $(GLOBAL)/rules"; \
+		echo "(re-attest with: bash-gate attest --global, if you edited them)"; \
 	fi
 	@echo "engine installed     -> $(ENGINE)"
 	@echo "register the hook (command: $(ENGINE)/gate.sh) in ~/.claude/settings.json"
