@@ -67,4 +67,4 @@ install: build
 	@echo "register the hook (command: $(ENGINE)/gate.sh) in ~/.claude/settings.json"
 
 clean:
-	rm -r "$(DIST)"
+	if [ -d "$(DIST)" ]; then rm -r "$(DIST)"; fi
