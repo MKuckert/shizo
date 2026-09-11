@@ -12,5 +12,18 @@
     "commit": "",
     "pr": "",
     "sessionUrl": false
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude-bash-rules/engine/gate.sh"
+          }
+        ]
+      }
+    ]
   }
 }

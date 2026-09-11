@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude"],
   "meta": {
     "name": "bash-gate-claude",
-    "version": "3"
+    "version": "4"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -27,7 +27,13 @@
       "~/.bashrc",
       "/opt/homebrew/bin/go"
     ],
-    "read": ["~/.CFUserTextEncoding", "~/.claude-bash-rules"],
+    "read": [
+      "~/.CFUserTextEncoding",
+      "~/.claude-bash-rules",
+      "~/.claude-bash-rules/attestations",
+      "~/.claude-bash-rules/engine",
+      "~/.claude-bash-rules/global"
+    ],
     "bypass_protection": ["~/.bashrc"]
   },
   "network": {

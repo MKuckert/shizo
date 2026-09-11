@@ -56,6 +56,7 @@ run_hook before
 trap 'run_hook after' EXIT
 
 nono wrap \
+  --silent \
   --profile "$PROFILE_JSON" \
   --workdir "$WORKSPACE" \
   --allow-cwd \
