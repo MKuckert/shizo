@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude"],
   "meta": {
     "name": "bash-gate-claude",
-    "version": "2"
+    "version": "3"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -63,7 +63,7 @@
       "DISABLE_FEEDBACK_COMMAND": "1",
       "DISABLE_INSTALL_GITHUB_APP_COMMAND": "1",
       "DISABLE_UPGRADE_COMMAND": "1",
-      "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-6",
       "DO_NOT_TRACK": "1",
       "GOPATH": "~/.go"
     }
