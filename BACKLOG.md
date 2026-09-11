@@ -1,2 +1,3 @@
+- [ ] [Fix attestation security theatre](plans/drafts/PLAN-attestation-theatre.md)
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
