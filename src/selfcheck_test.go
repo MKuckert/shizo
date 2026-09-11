@@ -72,6 +72,63 @@ func TestProbeDirWrite(t *testing.T) {
 	}
 }
 
+func TestProbeStoreReadOnly(t *testing.T) {
+	skipIfRoot(t)
+
+	// Writable store (overwrite existing record)
+	dir := t.TempDir()
+	writeFile(t, dir, "global.attest", "schema 1\n")
+	ok, _ := probeStoreReadOnly(dir)
+	if ok {
+		t.Error("writable store with .attest file: should report not read-only")
+	}
+
+	// Writable store (create-only, no .attest files)
+	empty := t.TempDir()
+	ok, _ = probeStoreReadOnly(empty)
+	if ok {
+		t.Error("writable empty dir: should report not read-only via create check")
+	}
+
+	// Writable parent (attestations/ read-only but parent writable)
+	root := t.TempDir()
+	attestDir := filepath.Join(root, "attestations")
+	os.MkdirAll(attestDir, 0o755)
+	os.Chmod(attestDir, 0o555)
+	t.Cleanup(func() { os.Chmod(attestDir, 0o755) })
+	ok, detail := probeStoreReadOnly(attestDir)
+	if ok {
+		t.Errorf("writable parent: should fail, got detail=%q", detail)
+	}
+	if !strings.Contains(detail, "parent is writable") {
+		t.Errorf("expected parent-writable detail, got %q", detail)
+	}
+
+	// Non-existent dir (fail-closed)
+	ok, _ = probeStoreReadOnly(filepath.Join(t.TempDir(), "nope"))
+	if ok {
+		t.Error("non-existent dir: should fail closed")
+	}
+
+	// Fully read-only path
+	roRoot := t.TempDir()
+	roDir := filepath.Join(roRoot, "attestations")
+	os.MkdirAll(roDir, 0o755)
+	writeFile(t, roDir, "global.attest", "schema 1\n")
+	os.Chmod(filepath.Join(roDir, "global.attest"), 0o444)
+	os.Chmod(roDir, 0o555)
+	os.Chmod(roRoot, 0o555)
+	t.Cleanup(func() {
+		os.Chmod(roRoot, 0o755)
+		os.Chmod(roDir, 0o755)
+		os.Chmod(filepath.Join(roDir, "global.attest"), 0o644)
+	})
+	ok, detail = probeStoreReadOnly(roDir)
+	if !ok {
+		t.Errorf("read-only path should pass, got detail=%q", detail)
+	}
+}
+
 func TestConfigLoadErrors(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "global/rules", "sandbox nono\nallow git status ANY\n")
@@ -98,6 +155,9 @@ func setupSelfcheck(t *testing.T) string {
 	root := t.TempDir()
 	writeFile(t, root, "global/rules", "sandbox nono\nallow git status ANY\n")
 	if err := os.MkdirAll(filepath.Join(root, "engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "attestations"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
@@ -133,8 +193,8 @@ func TestSelfcheckResultsOutsideSandbox(t *testing.T) {
 	if !byName["config loads clean"].Pass {
 		t.Errorf("config loads clean should pass: %+v", byName["config loads clean"])
 	}
-	if len(results) != 7 {
-		t.Errorf("got %d results, want 7", len(results))
+	if len(results) != 8 {
+		t.Errorf("got %d results, want 8", len(results))
 	}
 }
 

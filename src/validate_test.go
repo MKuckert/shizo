@@ -58,7 +58,7 @@ func TestValidateRequiresSandbox(t *testing.T) {
 	// The loader agrees: same body denies all.
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", body)
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("missing sandbox should deny all")
 	}
 	// Project tier does not require it (directives are global-only there).

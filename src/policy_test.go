@@ -25,7 +25,7 @@ func policyFixture(t *testing.T, extraRules string) (*config, environ, string) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", rules)
 	attestGlobal(t, dir, rules)
-	cfg := loadConfig(g, "")
+	cfg := loadConfig(g, "", installRoot())
 	if cfg.denyAll {
 		t.Fatalf("fixture config denied all: %s", cfg.denyReason)
 	}
@@ -80,7 +80,7 @@ func TestPolicySandboxGate(t *testing.T) {
 	body := "sandbox dangerously-none\ntrust " + bin + "\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
 	attestGlobal(t, dir, body)
-	cfg = loadConfig(g, "")
+	cfg = loadConfig(g, "", installRoot())
 	if cfg.denyAll {
 		t.Fatalf("config denied all: %s", cfg.denyReason)
 	}
@@ -180,7 +180,7 @@ func TestProjectTighteningApplies(t *testing.T) {
 	projBody := "deny rm ANY\n"
 	proj := writeFile(t, projDir, ".claude-bash-rules", projBody)
 	attestProject(t, dir, proj, projBody)
-	cfg := loadConfig(g, filepath.Join(projDir, ".claude-bash-rules"))
+	cfg := loadConfig(g, filepath.Join(projDir, ".claude-bash-rules"), installRoot())
 	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
 
 	if got, _, _ := decide("rm x", projDir, cfg, env); got != outDeny {

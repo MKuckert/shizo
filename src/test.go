@@ -81,7 +81,7 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 
-	cfg := loadConfig(globalRulesPath(), projectRulesPathFor(*cwd))
+	cfg := loadConfig(globalRulesPath(), projectRulesPathFor(*cwd), installRoot())
 
 	env := currentEnviron()
 	if *assumeSandboxed {

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,10 +20,34 @@ func setupRun(t *testing.T, rulesBody string) string {
 	writeFile(t, root, "global/rules", body)
 	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
 	t.Setenv("PATH", bin)
-	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
 	t.Setenv("HOME", t.TempDir()) // isolate logs
 	attestGlobal(t, root, body)
+	lockdownAttestDir(t, root)
+	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap") // after attestGlobal (which clears it) and lockdown
+	old := hookRootFn
+	hookRootFn = func() string { return root }
+	t.Cleanup(func() { hookRootFn = old })
 	return bin
+}
+
+// lockdownAttestDir makes the attestation store and its parent read-only so
+// the store-writability probe in verifyAttestation passes.
+func lockdownAttestDir(t *testing.T, root string) {
+	t.Helper()
+	attestDir := filepath.Join(root, "attestations")
+	entries, _ := os.ReadDir(attestDir)
+	for _, e := range entries {
+		os.Chmod(filepath.Join(attestDir, e.Name()), 0o444)
+	}
+	os.Chmod(attestDir, 0o555)
+	os.Chmod(root, 0o555)
+	t.Cleanup(func() {
+		os.Chmod(root, 0o755)
+		os.Chmod(attestDir, 0o755)
+		for _, e := range entries {
+			os.Chmod(filepath.Join(attestDir, e.Name()), 0o644)
+		}
+	})
 }
 
 func runWith(t *testing.T, input string) (int, string) {
@@ -164,6 +190,56 @@ func TestDispatchArglessNeverReadsStdin(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "permissionDecision") {
 		t.Errorf("arg-less leaked a hook decision: %q", out.String())
+	}
+}
+
+func TestDefaultHookRootReturnsValidPath(t *testing.T) {
+	root := defaultHookRoot()
+	if root == "" {
+		t.Fatal("defaultHookRoot returned empty string")
+	}
+	if !filepath.IsAbs(root) {
+		t.Errorf("defaultHookRoot should return an absolute path, got %q", root)
+	}
+	if !strings.HasSuffix(root, ".claude-bash-rules") {
+		t.Errorf("defaultHookRoot should end in .claude-bash-rules, got %q", root)
+	}
+}
+
+func TestHookDeniesWhenStoreWritable(t *testing.T) {
+	skipIfRoot(t)
+	root := t.TempDir()
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	body := "sandbox nono\ntrust " + bin + "\n" + "allow git status ANY\n"
+	writeFile(t, root, "global/rules", body)
+	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
+	t.Setenv("PATH", bin)
+	t.Setenv("HOME", t.TempDir())
+	attestGlobal(t, root, body)
+	// Do NOT lock down — leave attestation store writable.
+	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
+	old := hookRootFn
+	hookRootFn = func() string { return root }
+	t.Cleanup(func() { hookRootFn = old })
+
+	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
+	if rc != 2 {
+		t.Errorf("writable store should deny: rc=%d", rc)
+	}
+	if decisionOf(t, out) != "deny" {
+		t.Errorf("writable store: decision=%s", decisionOf(t, out))
+	}
+}
+
+func TestHookDeniesWhenHookRootEmpty(t *testing.T) {
+	old := hookRootFn
+	hookRootFn = func() string { return "" }
+	t.Cleanup(func() { hookRootFn = old })
+
+	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
+	if rc != 2 || decisionOf(t, out) != "deny" {
+		t.Errorf("empty hookRoot should deny: rc=%d out=%s", rc, out)
 	}
 }
 

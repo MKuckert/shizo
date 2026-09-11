@@ -29,7 +29,7 @@ deny git push ANY
 
 func TestMissingGlobalDenyAll(t *testing.T) {
 	dir := t.TempDir()
-	cfg := loadConfig(filepath.Join(dir, "nope"), "")
+	cfg := loadConfig(filepath.Join(dir, "nope"), "", installRoot())
 	if !cfg.denyAll {
 		t.Error("missing global should deny all")
 	}
@@ -39,7 +39,7 @@ func TestMissingProjectGlobalOnly(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", validGlobal)
 	attestGlobal(t, dir, validGlobal)
-	cfg := loadConfig(g, filepath.Join(dir, "no-project"))
+	cfg := loadConfig(g, filepath.Join(dir, "no-project"), installRoot())
 	if cfg.denyAll {
 		t.Fatal("missing project must not deny all")
 	}
@@ -51,7 +51,7 @@ func TestMissingProjectGlobalOnly(t *testing.T) {
 func TestMalformedLineDenyAll(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", "wat is this\n")
-	cfg := loadConfig(g, "")
+	cfg := loadConfig(g, "", installRoot())
 	if !cfg.denyAll {
 		t.Error("malformed line should deny all")
 	}
@@ -64,7 +64,7 @@ func TestProjectLooseningIgnored(t *testing.T) {
 	projRules := "trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n"
 	proj := writeFile(t, dir, ".claude-bash-rules", projRules)
 	attestProject(t, dir, proj, projRules)
-	cfg := loadConfig(g, proj)
+	cfg := loadConfig(g, proj, installRoot())
 	if cfg.denyAll {
 		t.Fatal("project loosening should be ignored, not deny-all")
 	}
@@ -93,24 +93,24 @@ func TestReturntype(t *testing.T) {
 	body := "returntype automode\nsandbox nono\nallow ls ANY\n"
 	g := writeFile(t, dir, "a/rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.returnMode != "automode" {
+	if cfg := loadConfig(g, "", installRoot()); cfg.denyAll || cfg.returnMode != "automode" {
 		t.Errorf("automode: %+v", cfg)
 	}
 	// absent => decision
 	body = "sandbox nono\nallow ls ANY\n"
 	g = writeFile(t, dir, "b/rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, ""); cfg.returnMode != "decision" {
+	if cfg := loadConfig(g, "", installRoot()); cfg.returnMode != "decision" {
 		t.Error("absent returntype should default to decision")
 	}
 	// unknown value => deny all
 	g = writeFile(t, dir, "c/rules", "returntype wat\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("unknown returntype should deny all")
 	}
 	// duplicate => deny all
 	g = writeFile(t, dir, "d/rules", "returntype decision\nreturntype automode\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("duplicate returntype should deny all")
 	}
 }
@@ -121,29 +121,29 @@ func TestSandbox(t *testing.T) {
 	body := "sandbox nono\nallow ls ANY\n"
 	g := writeFile(t, dir, "a/rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "nono" {
+	if cfg := loadConfig(g, "", installRoot()); cfg.denyAll || cfg.sandboxMode != "nono" {
 		t.Errorf("nono: %+v", cfg)
 	}
 	// explicit dangerously-none
 	body = "sandbox dangerously-none\nallow ls ANY\n"
 	g = writeFile(t, dir, "b/rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, ""); cfg.denyAll || cfg.sandboxMode != "dangerously-none" {
+	if cfg := loadConfig(g, "", installRoot()); cfg.denyAll || cfg.sandboxMode != "dangerously-none" {
 		t.Errorf("dangerously-none: %+v", cfg)
 	}
 	// absent => deny all (sandbox is required in the global tier)
 	g = writeFile(t, dir, "c/rules", "allow ls ANY\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("absent sandbox should deny all")
 	}
 	// unknown value => deny all
 	g = writeFile(t, dir, "d/rules", "sandbox wat\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("unknown sandbox should deny all")
 	}
 	// duplicate => deny all
 	g = writeFile(t, dir, "e/rules", "sandbox nono\nsandbox dangerously-none\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("duplicate sandbox should deny all")
 	}
 }
@@ -151,7 +151,7 @@ func TestSandbox(t *testing.T) {
 func TestDirectiveAfterRuleDenyAll(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", "allow ls ANY\ntrust /opt/homebrew/bin\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("directive after a rule should deny all")
 	}
 }
@@ -159,7 +159,7 @@ func TestDirectiveAfterRuleDenyAll(t *testing.T) {
 func TestTrustNeedsAbsolute(t *testing.T) {
 	dir := t.TempDir()
 	g := writeFile(t, dir, "rules", "trust relative/bin\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Error("relative trust dir should deny all")
 	}
 }
@@ -173,7 +173,7 @@ func TestBadRuleShapeDenyAll(t *testing.T) {
 		"allow git HAS -c status", // token after HAS flag
 	} {
 		g := writeFile(t, dir, "rules", body+"\n")
-		if cfg := loadConfig(g, ""); !cfg.denyAll {
+		if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 			t.Errorf("%q should deny all", body)
 		}
 	}

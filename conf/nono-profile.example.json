@@ -8,7 +8,12 @@
     "access": "readwrite"
   },
   "filesystem": {
-    "read": ["~/.claude-bash-rules"],
+    "read": [
+      "~/.claude-bash-rules",
+      "~/.claude-bash-rules/attestations",
+      "~/.claude-bash-rules/engine",
+      "~/.claude-bash-rules/global"
+    ],
     "allow": ["~/.claude-bash-rules/logs", "<AGENT_WORKDIR>"]
   },
   "network": {

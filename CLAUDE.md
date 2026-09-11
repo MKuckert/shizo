@@ -89,6 +89,12 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 
 ## Conventions & guardrails
 
+- Documentation reads as one piece, not a changelog. When updating `docs/` or `README.md`,
+  integrate new material into the existing narrative — rewrite surrounding
+  sentences so the result reads as if it were always written that way. Never
+  append "now mitigated" / "three historical vectors" / "as of v…" lists to
+  existing prose; a reader who didn't see the diff should not be able to tell
+  where old text ends and new text begins.
 - Match the existing terse comment style; comments cite the relevant `docs/` section.
 - Keep matching/extraction functions **pure** (no I/O) — that is what makes them
   testable. I/O lives in `main.go`, `rules.go`, `resolve.go`.

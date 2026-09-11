@@ -14,6 +14,7 @@ import (
 func attestGlobal(t *testing.T, root, content string) {
 	t.Helper()
 	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
+	t.Setenv("NONO_CAP_FILE", "") // probe is sandbox-only; most tests aren't
 	norm, reason, ok := normalizeTier(content, false)
 	if !ok {
 		t.Fatalf("attestGlobal: fixture content failed to normalize: %s", reason)
@@ -146,7 +147,7 @@ func TestLoadConfigDeniesWithoutAttestation(t *testing.T) {
 	t.Setenv("CLAUDE_BASH_RULES_DIR", dir) // no attestations/ written
 	body := "sandbox nono\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
-	cfg := loadConfig(g, "")
+	cfg := loadConfig(g, "", installRoot())
 	if !cfg.denyAll {
 		t.Fatal("unattested global rules must deny all")
 	}
@@ -159,7 +160,7 @@ func TestLoadConfigDeniesOnHashMismatch(t *testing.T) {
 	attestGlobal(t, dir, body)
 	// tamper after attesting
 	writeFile(t, dir, "rules", body+"allow git push ANY\n")
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Fatal("global rules changed since attestation must deny all")
 	}
 }
@@ -177,7 +178,7 @@ func TestLoadConfigDeniesOnNormVersionBump(t *testing.T) {
 	if err := writeAttestRecord(globalAttestPath(dir), rec, ""); err != nil {
 		t.Fatal(err)
 	}
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Fatal("norm-version mismatch must deny all, not silently pass")
 	}
 }
@@ -189,7 +190,7 @@ func TestLoadConfigDeniesOnMissingProjectAttestation(t *testing.T) {
 	attestGlobal(t, dir, body)
 	projDir := t.TempDir()
 	proj := writeFile(t, projDir, ".claude-bash-rules", "deny git push ANY\n") // tightening-only, unattested
-	if cfg := loadConfig(g, proj); !cfg.denyAll {
+	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
 		t.Fatal("an unattested project tier must deny all, even though it only tightens")
 	}
 }
@@ -204,7 +205,7 @@ func TestLoadConfigDeniesOnProjectHashMismatch(t *testing.T) {
 	proj := writeFile(t, projDir, ".claude-bash-rules", projBody)
 	attestProject(t, dir, proj, projBody)
 	writeFile(t, projDir, ".claude-bash-rules", projBody+"allow rm ANY\n") // tamper after attesting
-	if cfg := loadConfig(g, proj); !cfg.denyAll {
+	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
 		t.Fatal("project rules changed since attestation must deny all")
 	}
 }
@@ -214,7 +215,7 @@ func TestLoadConfigNoProjectFileSkipsProjectCheck(t *testing.T) {
 	body := "sandbox nono\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, filepath.Join(t.TempDir(), ".claude-bash-rules")); cfg.denyAll {
+	if cfg := loadConfig(g, filepath.Join(t.TempDir(), ".claude-bash-rules"), installRoot()); cfg.denyAll {
 		t.Fatalf("an absent project tier needs no attestation: %s", cfg.denyReason)
 	}
 }
@@ -226,12 +227,12 @@ func TestLoadConfigDeniesOnPathDrift(t *testing.T) {
 	g := writeFile(t, dir, "rules", body)
 	t.Setenv("PATH", bin)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, ""); cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); cfg.denyAll {
 		t.Fatalf("should pass right after attesting: %s", cfg.denyReason)
 	}
 	// PATH no longer includes the attested trust dir.
 	t.Setenv("PATH", t.TempDir())
-	if cfg := loadConfig(g, ""); !cfg.denyAll {
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 		t.Fatal("PATH drift relative to the attested trust-dir snapshot must deny all")
 	}
 }
@@ -242,6 +243,7 @@ func TestRunAttestGlobalThenLoadConfigTrusts(t *testing.T) {
 	root := t.TempDir()
 	bin := t.TempDir()
 	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
+	t.Setenv("NONO_CAP_FILE", "")
 	t.Setenv("PATH", bin)
 	body := "sandbox nono\ntrust " + bin + "\nallow git status ANY\n"
 	writeFile(t, root, "global/rules", body)
@@ -251,7 +253,7 @@ func TestRunAttestGlobalThenLoadConfigTrusts(t *testing.T) {
 	if rc != 0 {
 		t.Fatalf("attest --global: rc=%d err=%s", rc, errb.String())
 	}
-	if cfg := loadConfig(globalRulesPath(), ""); cfg.denyAll {
+	if cfg := loadConfig(globalRulesPath(), "", installRoot()); cfg.denyAll {
 		t.Fatalf("global attested via CLI should be trusted: %s", cfg.denyReason)
 	}
 }
@@ -271,8 +273,24 @@ func TestRunAttestProjectThenLoadConfigTrusts(t *testing.T) {
 	if rc != 0 {
 		t.Fatalf("attest project: rc=%d err=%s", rc, errb.String())
 	}
-	if cfg := loadConfig(g, proj); cfg.denyAll {
+	if cfg := loadConfig(g, proj, installRoot()); cfg.denyAll {
 		t.Fatalf("project attested via CLI should be trusted: %s", cfg.denyReason)
+	}
+}
+
+func TestDangerouslyNoneSkipsAttestation(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_BASH_RULES_DIR", dir)
+	t.Setenv("NONO_CAP_FILE", "")
+	body := "sandbox dangerously-none\nallow git status ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	// No attestation written — dangerously-none should skip the check entirely.
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll {
+		t.Fatalf("dangerously-none should skip attestation: %s", cfg.denyReason)
+	}
+	if cfg.sandboxMode != "dangerously-none" {
+		t.Error("sandboxMode should be dangerously-none")
 	}
 }
 

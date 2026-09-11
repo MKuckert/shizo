@@ -130,11 +130,22 @@ Stated, not solved. These are the known edges of a fail-closed static gate:
   (`RULES.md §10`); `loadConfig` recomputes it on every load and denies
   everything on any divergence, so neither in-session tampering nor a
   hostile-shipped `.claude-bash-rules` takes effect until attested on this
-  machine. The trust anchor is the read-only grant on
-  `$CLAUDE_BASH_RULES_DIR` in the sandbox profile — a profile that makes any
-  ancestor of that path writable (the "ancestor-grant footgun",
-  `nono-profile-guide.md:1143`) makes the attestation store writable in-sandbox
-  and defeats this entirely.
+  machine. The trust anchor is that the attestation store is read-only inside
+  the sandbox. `verifyAttestation` probes the store for writability before
+  reading any record — if any write succeeds (overwrite, create, or
+  parent-rename) it denies everything, so a misconfigured sandbox profile that
+  leaves `attestations/` writable is caught at the gate, not discovered after
+  the fact. In hook mode the install root is resolved via `getpwuid` (the
+  password database) rather than `$CLAUDE_BASH_RULES_DIR` or `$HOME`, so the
+  agent cannot redirect the gate to a pre-forged rule store by manipulating
+  environment variables; operator commands (`validate`, `attest`, `test`,
+  `selfcheck`) still honour the env vars.
+- **Under `sandbox dangerously-none` attestation is skipped entirely!**
+  Without a sandbox the agent can rewrite both rules and records, so checking
+  hashes adds latency for zero security value.
+  Those the name `dangerously-none` is a deliberate warning: it is only safe
+  to use in a trusted environment where the agent cannot be tricked into running
+  unconfined.
 - **`automode` delegates the unmatched (`ask`) fallthrough** to Claude Code's
   classifier, so under it unknown commands no longer hit a guaranteed `ask`.
   Explicit `deny` and `allow` rules are still honoured. The human backstop for

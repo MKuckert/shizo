@@ -29,7 +29,7 @@ func denyAllConfig(reason string) *config {
 // A tier that fails attestation (unattested, changed since attest, or a live
 // PATH that no longer matches the attested trust-dir snapshot) also yields
 // deny-all — see attest_verify.go and plans/drafts/PLAN-rule-attestation.md.
-func loadConfig(globalPath, projectPath string) *config {
+func loadConfig(globalPath, projectPath, root string) *config {
 	cfg := &config{returnMode: "decision"}
 
 	globalData, err := os.ReadFile(globalPath)
@@ -59,8 +59,12 @@ func loadConfig(globalPath, projectPath string) *config {
 		}
 	}
 
-	if reason := verifyAttestation(globalData, projectPath, projectData, projectPresent); reason != "" {
-		return denyAllConfig(reason)
+	// dangerously-none: attestation adds latency for zero security value —
+	// without a sandbox the agent can rewrite both rules and records.
+	if cfg.sandboxMode != "dangerously-none" {
+		if reason := verifyAttestation(globalData, projectPath, projectData, projectPresent, root); reason != "" {
+			return denyAllConfig(reason)
+		}
 	}
 
 	return cfg
@@ -71,8 +75,17 @@ func loadConfig(globalPath, projectPath string) *config {
 // tier is present, its record also matches and the live normalized-PATH still
 // matches the global record's snapshot. No project file -> nothing to verify
 // for it (§ of the plan: "No project file ⇒ nothing to attest").
-func verifyAttestation(globalData []byte, projectPath string, projectData []byte, projectPresent bool) string {
-	root := installRoot()
+func verifyAttestation(globalData []byte, projectPath string, projectData []byte, projectPresent bool, root string) string {
+	// Probe store writability before trusting any records. Only meaningful
+	// inside the sandbox — outside it (tests, operator commands) everything
+	// is writable regardless of the profile.
+	if os.Getenv("NONO_CAP_FILE") != "" {
+		attestDir := filepath.Join(root, "attestations")
+		if ok, detail := probeStoreReadOnly(attestDir); !ok {
+			return "attestation store is writable in-sandbox: " + detail +
+				" — records are forgeable, re-check the sandbox profile"
+		}
+	}
 
 	gNorm, reason, ok := normalizeTier(string(globalData), false)
 	if !ok {

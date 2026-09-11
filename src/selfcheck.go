@@ -107,6 +107,10 @@ func selfcheckResults(root string) []checkResult {
 	writable, detail = probeDirWrite(engineDir)
 	out = append(out, checkResult{"engine/ not writable", !writable, detail})
 
+	attestDir := filepath.Join(root, "attestations")
+	storeOK, detail := probeStoreReadOnly(attestDir)
+	out = append(out, checkResult{"attestations/ not writable", storeOK, detail})
+
 	writable, detail = probeDirWrite(logs)
 	out = append(out, checkResult{"logs/ writable", writable, detail})
 
@@ -114,6 +118,43 @@ func selfcheckResults(root string) []checkResult {
 	out = append(out, checkResult{"config loads clean", len(errs) == 0, strings.Join(errs, "; ")})
 
 	return out
+}
+
+// probeStoreReadOnly verifies the attestation store cannot be tampered with:
+// (1) existing records can't be overwritten, (2) new files can't be created,
+// (3) the parent can't be renamed away.
+func probeStoreReadOnly(attestDir string) (ok bool, detail string) {
+	entries, err := os.ReadDir(attestDir)
+	if err != nil {
+		return false, "cannot read attestations/: " + err.Error()
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".attest" {
+			continue
+		}
+		f, err := os.OpenFile(filepath.Join(attestDir, e.Name()), os.O_WRONLY, 0)
+		if err == nil {
+			f.Close()
+			return false, "attestations/ is writable (overwrite succeeded)"
+		}
+		break
+	}
+	tmp := filepath.Join(attestDir, fmt.Sprintf(".probe-create-%d", os.Getpid()))
+	f, err := os.Create(tmp)
+	if err == nil {
+		f.Close()
+		os.Remove(tmp)
+		return false, "attestations/ is writable (create succeeded)"
+	}
+	parent := filepath.Dir(attestDir)
+	ptmp := filepath.Join(parent, fmt.Sprintf(".probe-parent-%d", os.Getpid()))
+	pf, err := os.Create(ptmp)
+	if err == nil {
+		pf.Close()
+		os.Remove(ptmp)
+		return false, "attestations/ parent is writable (rename attack possible)"
+	}
+	return true, "store is read-only"
 }
 
 // probeFileNotWritable attempts to open path for writing (no write, no

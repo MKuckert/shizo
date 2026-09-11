@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
@@ -118,11 +119,31 @@ evaluates the command against the rule tiers, and emits a decision object on
 stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
 (see $CLAUDE_BASH_RULES_DIR/logs).`
 
+// hookRootFn resolves the install root for hook mode via the password
+// database (getpwuid), not env vars. An agent that can set $HOME or
+// $CLAUDE_BASH_RULES_DIR cannot redirect the hook to a forged rule store.
+// Var so tests can override.
+var hookRootFn = defaultHookRoot
+
+func defaultHookRoot() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(u.HomeDir, ".claude-bash-rules")
+}
+
 func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
 	raw, _ := io.ReadAll(stdin)
 	in, inErr := parseInput(raw)
 
-	cfg := loadConfig(globalRulesPath(), projectRulesPathFor(in.Cwd))
+	root := hookRootFn()
+	if root == "" {
+		emitDecision(stdout, outDeny, "cannot determine home directory for rules")
+		return 2
+	}
+	gPath := filepath.Join(root, "global", "rules")
+	cfg := loadConfig(gPath, projectRulesPathFor(in.Cwd), root)
 
 	var (
 		outcome Outcome
