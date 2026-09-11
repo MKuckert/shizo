@@ -1,5 +1,10 @@
+- [ ] [Rename .claude-bash-rules directory to be harness-neutral](plans/drafts/PLAN-rename-directory.md)
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
-- [ ] Rename .claude-bash-rules directory to be harness-neutral
-- [ ] Make error messages better when attempting to attest from within a sandbox
-- [ ] Syntax highlighting for rule files
+- [ ] [Make error messages better when attempting to attest from within a sandbox](plans/drafts/PLAN-attest-sandbox-errors.md)
+- [ ] [Syntax highlighting for rule files](plans/drafts/PLAN-syntax-highlighting.md) or [a proper language server](plans/drafts/PLAN-language-server.md)
+- [ ] [Add go releaser and gitlab ci](plans/drafts/PLAN-goreleaser-gitlab-ci)
+- [ ] Better explanation in README and the docs overall (reword with Sol?)
+- [ ] [Nice presentation website for the tool](plans/drafts/PLAN-presentation-website.md)
+- [ ] Find alpha tester?
+- [ ] [Some nice colors in the outputs of `validate`, `attest`, `test` and `selfcheck`](plans/drafts/PLAN-output-colors.md)
