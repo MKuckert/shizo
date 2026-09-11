@@ -1,2 +1,5 @@
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
+- [ ] Rename .claude-bash-rules directory to be harness-neutral
+- [ ] Make error messages better when attempting to attest from within a sandbox
+- [ ] Syntax highlighting for rule files

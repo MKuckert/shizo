@@ -48,10 +48,7 @@ test:
 # Installs the binary + wrapper (read-only), and the starter global rules
 # ONLY if none exist yet — never clobbers an operator's tuned rules.
 install: build
-	# logs/ must exist before the sandbox starts: its parent is read-only inside
-	# the sandbox, so gate.sh cannot create it there. The nono profile grants
-	# write on this dir (not its parent), and the gate fails closed without it.
-	mkdir -p "$(ENGINE)" "$(GLOBAL)" "$(PREFIX)/logs"
+	mkdir -p "$(ENGINE)" "$(GLOBAL)" "$(PREFIX)/logs" "$(PREFIX)/attestations"
 	cp "$(BIN)" "$(ENGINE)/bash-gate"
 	cp "$(SRC)/gate.sh" "$(ENGINE)/gate.sh"
 	chmod 0755 "$(ENGINE)/bash-gate" "$(ENGINE)/gate.sh"

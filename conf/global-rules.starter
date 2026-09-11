@@ -1,43 +1,90 @@
-# bash-gate global rules — starter for this machine.
+# bash-gate v0.1 global rules — starter for a fresh installation.
+#
 # Installed to $HOME/.claude-bash-rules/global/rules (only if absent).
 # Directives (returntype, trust, sandbox) must come before any allow/deny rules.
 # Any deny wins over any allow; an unmatched command yields `ask`.
 
+# returntype: what to do when a command is not matched by any allow/deny rule.
+# - decision: the hook decides every case and emits `allow`, `deny`, or `ask`.
+# - automode: the hook emits deny and allow decisions but unmatched (ask) falls
+#   through to Claude Code's own auto-mode classifier.
 returntype decision
 
-# Required: pick a sandbox gate (omitting it denies everything). `nono` denies
-# unless NONO_CAP_FILE is set; `sandbox dangerously-none` drops the gate and runs
-# with no sandbox.
+# Required: pick a sandbox gate (omitting it denies everything).
+# - nono: most secure gate, run your harness in a nono sandbox
+# - dangerously-none: drops the gate and runs with no sandbox. No real protection.
 sandbox nono
 
-# Trusted binary directories (resolved via the inherited PATH, no realpath).
-# /usr/local/bin is intentionally omitted: it is world-writable on this machine.
+# Trusted directories for executable binary (resolved via the inherited PATH, no realpath).
 trust /opt/homebrew/bin
-trust /opt/homebrew/opt/coreutils/libexec/gnubin
-trust /usr/bin
 trust /bin
-trust /usr/sbin
 trust /sbin
+trust /usr/bin
+trust /usr/sbin
 
-# --- allow (documented project commands, read-only git) ---
+# rules (allow/deny)
+# Matches exactly the command and arguments.
+# - Use ANY to match zero or more arguments.
+# - Use HAS to match a command that has a specific argument anywhere in the argument list.
+# A deny rule takes precedence over an allow rule, and any unmatched command yields ask.
+
 allow git status ANY
 allow git log ANY
 allow git diff ANY
 allow git show ANY
 allow git branch ANY
 allow git fetch ANY
+# allow config reads and let setting configs fall-through to the operator
+allow git config --get ANY
+allow git config --get-regexp ANY
+allow git config --list ANY
+
 allow ls ANY
 allow cat ANY
 allow rg ANY
-allow composer ANY
-# `ddev ANY` is broad (ddev exec can run arbitrary commands in the container).
-# Tighten to specific subcommands if that matters for your threat model.
-allow ddev ANY
 
-# --- deny (dangerous git, exec-through-flag) ---
+# no push (human-in-the-loop)
 deny git push ANY
+
+# no hard resets
 deny git reset HAS --hard
+
+# no execution of external diff commands (could circumvent this gate)
 deny git HAS --ext-diff
+
+# no git config changes on-the-fly
 deny git HAS -c
+
+# no potential changes on remotes
+deny git remote add ANY
+deny git remote set-url ANY
+deny git submodule add ANY
+deny git submodule update
+deny git hook ANY
+deny git credential ANY
+deny git clone ANY
+
+# no execution of arbitrary commands via find
 deny find HAS -exec
-deny ssh HAS -o
+
+# no data exfiltration
+deny curl HAS -d
+deny curl HAS --data
+deny curl HAS -F
+deny curl HAS --upload-file
+deny wget HAS --post-data
+
+# none of this commands as those allow arbitrary code execution
+deny ssh ANY
+deny python ANY
+deny pip install ANY
+deny ruby ANY
+deny perl ANY
+deny php ANY
+deny bash ANY
+deny node ANY
+deny npx ANY
+deny npm install ANY
+deny bunx ANY
+deny bun install ANY
+deny make ANY
