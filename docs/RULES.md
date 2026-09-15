@@ -14,12 +14,12 @@ in `src/rules.go` (loading/validation), `src/match.go` (matching), and
 
 ## 1. Tiers and file locations
 
-Rules live in two tiers. Both are plain text files named `rules` / `.claude-bash-rules`.
+Rules live in two tiers. Both are plain text files named `rules` / `.bash-gate`.
 
 | Tier        | Location                                                                            | Required | Directives honoured |
 | ----------- | ----------------------------------------------------------------------------------- | -------- | ------------------- |
-| **Global**  | `$CLAUDE_BASH_RULES_DIR/global/rules`, else `$HOME/.claude-bash-rules/global/rules` | **yes**  | yes                 |
-| **Project** | `<cwd>/.claude-bash-rules` (exact cwd, no ancestor walk)                            | no       | **no**              |
+| **Global**  | `$BASH_GATE_DIR/global/rules`, else `$HOME/.bash-gate/global/rules` | **yes**  | yes                 |
+| **Project** | `<cwd>/.bash-gate` (exact cwd, no ancestor walk)                            | no       | **no**              |
 
 - **Global tier is required.** If it is missing or unreadable, or any line is
   malformed, **every command is denied**.
@@ -264,7 +264,7 @@ rule can rescue them:
 ## 8. Worked example — a complete global tier
 
 ```
-# $HOME/.claude-bash-rules/global/rules
+# $HOME/.bash-gate/global/rules
 
 # --- directives (must come first) ---
 returntype decision
@@ -312,7 +312,7 @@ Given the rules above:
 ## 9. Project tier example
 
 ```
-# <repo>/.claude-bash-rules
+# <repo>/.bash-gate
 
 # These are IGNORED here (global-only) and logged:
 #   trust /some/dir
@@ -339,11 +339,11 @@ fails closed when it has.
 
 **What gets attested.** `bash-gate attest` normalizes a tier (parse, drop
 comments/whitespace, sort rules, canonical-serialize) and `sha256`s the
-result, then writes a record under `$CLAUDE_BASH_RULES_DIR/attestations/`:
+result, then writes a record under `$BASH_GATE_DIR/attestations/`:
 
 ```
 bash-gate attest --global   # attest the resolved global tier
-bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.claude-bash-rules)
+bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.bash-gate)
 ```
 
 Because normalization drops comments/whitespace/rule-order, cosmetic edits
@@ -368,7 +368,7 @@ is treated as a mismatch (re-attest), never a silent pass.
 **Scope.** This is whole-tier trust, not a diff review: a project `deny`
 (tightening) still requires attestation, same as a project `allow`. It cannot
 distinguish a repo you trust from a hostile one — it forces a human `attest`
-either way, once per machine. Its value for a shipped `.claude-bash-rules` is
+either way, once per machine. Its value for a shipped `.bash-gate` is
 "no project rule takes effect until a human looked at it here." It is only as
-strong as the read-only grant on `$CLAUDE_BASH_RULES_DIR` in the sandbox
+strong as the read-only grant on `$BASH_GATE_DIR` in the sandbox
 profile — see `docs/ARCHITECTURE.md`.

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude-bash-rules/engine/gate.sh"
+            "command": "$HOME/.bash-gate/engine/gate.sh"
           }
         ]
       }

@@ -13,7 +13,7 @@ is the contract at the two ends of the [evaluation pipeline](EVALUATION.md).
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "$HOME/.claude-bash-rules/engine/gate.sh" }]
+        "hooks": [{ "type": "command", "command": "$HOME/.bash-gate/engine/gate.sh" }]
       }
     ]
   }
@@ -117,7 +117,7 @@ exit, empty body, non-JSON body). The one non-JSON stdout it honours is the
 ```sh
 #!/bin/sh
 dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-log="$HOME/.claude-bash-rules/logs"
+log="$HOME/.bash-gate/logs"
 mkdir -p "$log" 2>/dev/null
 # No decision may run unlogged. If the logs dir is not writable, fail closed
 # with a specific, actionable deny — not the cryptic crash-deny below. The probe

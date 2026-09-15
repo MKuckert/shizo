@@ -110,7 +110,7 @@ regardless of mode.
 
 No decision may run unlogged (`gate.sh` fails closed if the log directory is not
 writable). One JSON object is appended per decision to
-`$HOME/.claude-bash-rules/logs/YYYY-MM-DD.jsonl`:
+`$HOME/.bash-gate/logs/YYYY-MM-DD.jsonl`:
 
 ```json
 {

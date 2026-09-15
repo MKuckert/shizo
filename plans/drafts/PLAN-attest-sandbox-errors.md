@@ -3,7 +3,7 @@
 ## Problem
 
 Running `bash-gate attest` inside a nono sandbox fails with a generic
-`attest: open $HOME/.claude-bash-rules/attestations/global.attest: operation not permitted`
+`attest: open $HOME/.bash-gate/attestations/global.attest: operation not permitted`
 from `MkdirAll` or `WriteFile` on the attestations directory. The operator
 gets no hint that attest is an out-of-sandbox operation — they just see
 a Go `os` error and have to figure it out.

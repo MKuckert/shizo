@@ -55,7 +55,7 @@ finding.line                → LSP line (0-indexed, so line-1)
 
 The server needs to know whether a file is global or project tier (affects
 which directives are valid). Heuristic: if the file path ends in
-`.claude-bash-rules`, it's a project tier; if it matches `global/rules`, it's
+`.bash-gate`, it's a project tier; if it matches `global/rules`, it's
 global. Configurable via an initialization option if the heuristic proves
 insufficient.
 

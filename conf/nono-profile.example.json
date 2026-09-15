@@ -9,12 +9,12 @@
   },
   "filesystem": {
     "read": [
-      "~/.claude-bash-rules",
-      "~/.claude-bash-rules/attestations",
-      "~/.claude-bash-rules/engine",
-      "~/.claude-bash-rules/global"
+      "~/.bash-gate",
+      "~/.bash-gate/attestations",
+      "~/.bash-gate/engine",
+      "~/.bash-gate/global"
     ],
-    "allow": ["~/.claude-bash-rules/logs", "<AGENT_WORKDIR>"]
+    "allow": ["~/.bash-gate/logs", "<AGENT_WORKDIR>"]
   },
   "network": {
     "block": true

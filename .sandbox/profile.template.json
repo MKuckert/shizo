@@ -15,7 +15,7 @@
     "allow": [
       "~/.npm",
       "~/.go",
-      "~/.claude-bash-rules/logs",
+      "~/.bash-gate/logs",
       "~/repos/bash-gate"
     ],
     "deny": ["~/.gitconfig"],
@@ -29,10 +29,10 @@
     ],
     "read": [
       "~/.CFUserTextEncoding",
-      "~/.claude-bash-rules",
-      "~/.claude-bash-rules/attestations",
-      "~/.claude-bash-rules/engine",
-      "~/.claude-bash-rules/global"
+      "~/.bash-gate",
+      "~/.bash-gate/attestations",
+      "~/.bash-gate/engine",
+      "~/.bash-gate/global"
     ],
     "bypass_protection": ["~/.bashrc"]
   },

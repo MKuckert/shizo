@@ -16,7 +16,7 @@ func setupTest(t *testing.T, rulesBody string) string {
 	mkExe(t, bin, "git")
 	body := "sandbox nono\ntrust " + bin + "\n" + rulesBody
 	writeFile(t, root, "global/rules", body)
-	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
+	t.Setenv("BASH_GATE_DIR", root)
 	t.Setenv("PATH", bin)
 	t.Setenv("NONO_CAP_FILE", "") // gate off by default; --assume-sandboxed flips it
 	t.Setenv("HOME", t.TempDir())
@@ -55,7 +55,7 @@ func TestTestCwdPicksProjectTier(t *testing.T) {
 	setupTest(t, "allow git status ANY\n")
 	proj := t.TempDir()
 	projBody := "deny git status ANY\n"
-	projPath := writeFile(t, proj, ".claude-bash-rules", projBody)
+	projPath := writeFile(t, proj, ".bash-gate", projBody)
 	attestProject(t, installRoot(), projPath, projBody)
 
 	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", proj, "git", "status")

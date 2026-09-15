@@ -18,7 +18,7 @@ denied.
 
 ```sh
 make test
-make install                 # installs to $HOME/.claude-bash-rules
+make install                 # installs to $HOME/.bash-gate
 make install PREFIX=/tmp/x   # or anywhere, for verification
 ```
 
@@ -30,7 +30,7 @@ Then register the hook in `~/.claude/settings.json`:
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "$HOME/.claude-bash-rules/engine/gate.sh" }]
+        "hooks": [{ "type": "command", "command": "$HOME/.bash-gate/engine/gate.sh" }]
       }
     ]
   }
@@ -41,19 +41,19 @@ Then register the hook in `~/.claude/settings.json`:
 
 | Path                                    | Access                | Contents                       |
 | --------------------------------------- | --------------------- | ------------------------------ |
-| `$HOME/.claude-bash-rules/engine/`      | read-only             | `bash-gate`, `gate.sh`         |
-| `$HOME/.claude-bash-rules/global/rules` | read-only             | global rule tier               |
-| `$HOME/.claude-bash-rules/logs/`        | writable              | `YYYY-MM-DD.jsonl` per decision |
-| `$HOME/.claude-bash-rules/attestations/`| read-only             | `.attest` records (see Attest)  |
-| `<cwd>/.claude-bash-rules`              | repo, writable        | project tier (optional)        |
+| `$HOME/.bash-gate/engine/`      | read-only             | `bash-gate`, `gate.sh`         |
+| `$HOME/.bash-gate/global/rules` | read-only             | global rule tier               |
+| `$HOME/.bash-gate/logs/`        | writable              | `YYYY-MM-DD.jsonl` per decision |
+| `$HOME/.bash-gate/attestations/`| read-only             | `.attest` records (see Attest)  |
+| `<cwd>/.bash-gate`              | repo, writable        | project tier (optional)        |
 
-`$CLAUDE_BASH_RULES_DIR` overrides the install root; the global rules are then
+`$BASH_GATE_DIR` overrides the install root; the global rules are then
 read from `<that dir>/global/rules`. Logs always live under `$HOME`.
 
 ## Prerequisite: nono read grant
 
 The sandbox must grant **read** (deliberately not write) on
-`$HOME/.claude-bash-rules/`. Without it the hook cannot load its rules and
+`$HOME/.bash-gate/`. Without it the hook cannot load its rules and
 `gate.sh` denies everything.
 
 ## Example sandbox profile
@@ -65,13 +65,13 @@ the repo path the agent operates on before use.
 
 | Field                          | Value                                        | Why                                                                 |
 | ------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-| `filesystem.read`               | `~/.claude-bash-rules`                        | Lets the hook load its rules — read only, so the agent can't rewrite them. |
-| `filesystem.allow`              | `~/.claude-bash-rules/logs`, `<AGENT_WORKDIR>` | Readwrite only where the agent needs to write: decision logs and its own workdir. |
+| `filesystem.read`               | `~/.bash-gate`                        | Lets the hook load its rules — read only, so the agent can't rewrite them. |
+| `filesystem.allow`              | `~/.bash-gate/logs`, `<AGENT_WORKDIR>` | Readwrite only where the agent needs to write: decision logs and its own workdir. |
 | `workdir.access`                | `readwrite`                                   | The agent's working directory itself.                               |
 | `network.block`                 | `true`                                        | Default-deny network; add `network.allow_domain` entries as needed. |
 | `environment.allow_vars`        | minimal set                                   | Strip everything not explicitly needed by the agent or `bash-gate`. |
 
-`$HOME/.claude-bash-rules/engine/` and `global/rules` stay outside `allow`,
+`$HOME/.bash-gate/engine/` and `global/rules` stay outside `allow`,
 so they're readable but never writable from inside the sandbox — this is
 what `sandbox nono` (see [`docs/RULES.md`](docs/RULES.md)) assumes.
 
@@ -105,7 +105,7 @@ It's never invoked directly in practice — `gate.sh` (installed as the hook
 `command`, see above) wraps it and turns every fail-open gap (crash, timeout,
 empty/non-JSON output) into a blocking deny, and refuses to run at all if its
 log directory isn't writable. This is also the only mode that logs decisions,
-to `$HOME/.claude-bash-rules/logs/YYYY-MM-DD.jsonl`.
+to `$HOME/.bash-gate/logs/YYYY-MM-DD.jsonl`.
 
 **See [`docs/CLAUDE_CODE_HOOKS.md`](docs/CLAUDE_CODE_HOOKS.md)** for the full
 I/O contract, `returntype automode`, exit codes, and the `gate.sh` source.
@@ -142,7 +142,7 @@ outside the sandbox, after reviewing the rules (e.g. with `validate`):
 
 ```sh
 dist/bash-gate attest --global   # attest the resolved global tier
-dist/bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.claude-bash-rules)
+dist/bash-gate attest [FILE]     # attest a project tier (default: <cwd>/.bash-gate)
 ```
 
 Cosmetic edits (comments, whitespace, rule order) don't force a re-attest —
@@ -195,7 +195,7 @@ The rules directory is read-only from inside the sandbox and a load failure
 denies everything, so recovery happens from **outside** the sandbox:
 
 1. Remove the `PreToolUse` entry from `~/.claude/settings.json`, **or**
-2. Set `CLAUDE_BASH_RULES_DIR` to a directory containing a permissive
+2. Set `BASH_GATE_DIR` to a directory containing a permissive
    `global/rules` file.
 
 ## GATE_DEBUG (sensitive)

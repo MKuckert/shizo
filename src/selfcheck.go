@@ -26,9 +26,9 @@ actually allowed — each check attempts the real operation.
 usage: bash-gate selfcheck [--root DIR] [--json]
 
 Flags:
-  --root DIR  install root to check (default: $CLAUDE_BASH_RULES_DIR or
-              ~/.claude-bash-rules); logs/ is always checked at its real,
-              fixed location ($HOME/.claude-bash-rules/logs, per gate.sh)
+  --root DIR  install root to check (default: $BASH_GATE_DIR or
+              ~/.bash-gate); logs/ is always checked at its real,
+              fixed location ($HOME/.bash-gate/logs, per gate.sh)
   --json      emit machine-readable JSON instead of a table
 
 Exit 0 if every check passes, 1 if any fails, 2 on a usage problem.`

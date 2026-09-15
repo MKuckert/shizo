@@ -86,7 +86,7 @@ Each decision, the choice made, and what it commits us to.
 | **Loosening lives global** | `trust` / `sandbox` / `returntype` are global-tier only                                    | Anything that can *widen* policy is kept out of the attacker-editable project tier; ignored + logged there.       |
 | **Config format**     | Line-oriented, inert DSL                                                                         | The project tier is attacker-editable, so config is matched, **never executed**.                                 |
 | **Sandbox gate**      | `sandbox nono` requires `NONO_CAP_FILE`; directive global-only                                    | Refuses to run outside its intended sandbox unless explicitly, globally opted out via `dangerously-none`.        |
-| **Install location**  | `$HOME/.claude-bash-rules/`, engine + rules read-only                                            | `~/.claude` is writable from inside the sandbox; the gate must live where the agent cannot disable it. Deployment example: [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) (`.sandbox/` is the dev profile for building `bash-gate` itself). Nothing enforces this shape is actually delivered except the nono profile — `bash-gate selfcheck` (run inside the sandbox) probes it. |
+| **Install location**  | `$HOME/.bash-gate/`, engine + rules read-only                                            | `~/.claude` is writable from inside the sandbox; the gate must live where the agent cannot disable it. Deployment example: [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) (`.sandbox/` is the dev profile for building `bash-gate` itself). Nothing enforces this shape is actually delivered except the nono profile — `bash-gate selfcheck` (run inside the sandbox) probes it. |
 | **Failure handling**  | Deny with reason; log all; deny on bad exit **or** empty/non-JSON output                          | "A control that fails open when it crashes is one segfault from absent." See [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md#exit-codes). |
 | **Deny signalling**   | `bash-gate` exits **2** (+ deny JSON) on deny, 0 otherwise; `gate.sh` propagates and forces exit 2 on any crash | Exit 2 is Claude Code's native blocking channel and needs no JSON parsing, so deny stays fail-closed even if the body is dropped. |
 | **Return-type modes** | `decision` (default) vs `automode`; automode emits denials and explicit allows, defers only the unmatched fallthrough | Lets the allowlist act as a pre-filter in front of the auto-mode classifier instead of owning every decision.    |
@@ -129,14 +129,14 @@ Stated, not solved. These are the known edges of a fail-closed static gate:
   denials. `bash-gate attest` records a human-approved hash of each tier
   (`RULES.md §10`); `loadConfig` recomputes it on every load and denies
   everything on any divergence, so neither in-session tampering nor a
-  hostile-shipped `.claude-bash-rules` takes effect until attested on this
+  hostile-shipped `.bash-gate` takes effect until attested on this
   machine. The trust anchor is that the attestation store is read-only inside
   the sandbox. `verifyAttestation` probes the store for writability before
   reading any record — if any write succeeds (overwrite, create, or
   parent-rename) it denies everything, so a misconfigured sandbox profile that
   leaves `attestations/` writable is caught at the gate, not discovered after
   the fact. In hook mode the install root is resolved via `getpwuid` (the
-  password database) rather than `$CLAUDE_BASH_RULES_DIR` or `$HOME`, so the
+  password database) rather than `$BASH_GATE_DIR` or `$HOME`, so the
   agent cannot redirect the gate to a pre-forged rule store by manipulating
   environment variables; operator commands (`validate`, `attest`, `test`,
   `selfcheck`) still honour the env vars.
@@ -162,7 +162,7 @@ Stated, not solved. These are the known edges of a fail-closed static gate:
 If the gate misfires, the rules directory is read-only from inside the sandbox
 and load failure denies everything, so recovery must happen from **outside** the
 sandbox: remove the `PreToolUse` entry from `~/.claude/settings.json`, or point
-`CLAUDE_BASH_RULES_DIR` at a directory containing a permissive `global/rules`.
+`BASH_GATE_DIR` at a directory containing a permissive `global/rules`.
 
 ---
 

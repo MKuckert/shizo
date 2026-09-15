@@ -47,8 +47,8 @@ Commands:
   --version   print the version (alias: -v)
   (none)      → help
 
-Rules live in $CLAUDE_BASH_RULES_DIR (default ~/.claude-bash-rules): the global
-tier under global/rules, an optional per-project tier at <cwd>/.claude-bash-rules.
+Rules live in $BASH_GATE_DIR (default ~/.bash-gate): the global
+tier under global/rules, an optional per-project tier at <cwd>/.bash-gate.
 See docs/RULES.md. Run "bash-gate help <command>" for per-command usage.`
 
 func main() {
@@ -117,11 +117,11 @@ usage: bash-gate claude-hook
 Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
 evaluates the command against the rule tiers, and emits a decision object on
 stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
-(see $CLAUDE_BASH_RULES_DIR/logs).`
+(see $BASH_GATE_DIR/logs).`
 
 // hookRootFn resolves the install root for hook mode via the password
 // database (getpwuid), not env vars. An agent that can set $HOME or
-// $CLAUDE_BASH_RULES_DIR cannot redirect the hook to a forged rule store.
+// $BASH_GATE_DIR cannot redirect the hook to a forged rule store.
 // Var so tests can override.
 var hookRootFn = defaultHookRoot
 
@@ -130,7 +130,7 @@ func defaultHookRoot() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(u.HomeDir, ".claude-bash-rules")
+	return filepath.Join(u.HomeDir, ".bash-gate")
 }
 
 func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
@@ -213,10 +213,13 @@ func currentEnviron() environ {
 // --- paths (§0) ---
 
 func installRoot() string {
+	if d := os.Getenv("BASH_GATE_DIR"); d != "" {
+		return d
+	}
 	if d := os.Getenv("CLAUDE_BASH_RULES_DIR"); d != "" {
 		return d
 	}
-	return filepath.Join(os.Getenv("HOME"), ".claude-bash-rules")
+	return filepath.Join(os.Getenv("HOME"), ".bash-gate")
 }
 
 func globalRulesPath() string { return filepath.Join(installRoot(), "global", "rules") }
@@ -225,11 +228,11 @@ func projectRulesPathFor(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	return filepath.Join(cwd, ".claude-bash-rules")
+	return filepath.Join(cwd, ".bash-gate")
 }
 
 func logDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".claude-bash-rules", "logs")
+	return filepath.Join(os.Getenv("HOME"), ".bash-gate", "logs")
 }
 
 // --- logging (§4.3) ---

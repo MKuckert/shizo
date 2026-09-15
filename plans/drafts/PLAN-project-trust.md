@@ -9,7 +9,7 @@ trust list. Operators want per-repo trust.
 ## Why this isn't already allowed
 
 `trust` is global-only **by design**: it widens policy, and the project tier is
-attacker-editable (prompt injection can write `<cwd>/.claude-bash-rules`). A
+attacker-editable (prompt injection can write `<cwd>/.bash-gate`). A
 naïve project `trust` would be a full bypass:
 
 ```
@@ -24,7 +24,7 @@ keep both:
   in `loadConfig` via `verifyAttestation`) is mandatory: a tier that is
   unattested or changed since attest yields deny-all. So the project tier is not
   *freely* attacker-editable in effect — an attacker who writes or edits
-  `<cwd>/.claude-bash-rules` breaks its hash and gets deny-all, not a bypass. The
+  `<cwd>/.bash-gate` breaks its hash and gets deny-all, not a bypass. The
   operator must review and re-attest out-of-band before rules take effect.
 - **The rest of the pipeline.** A trusted dir alone allows nothing: the command
   still needs an allow rule, still loses to any deny, still hits `uncondDeny`.

@@ -1,8 +1,8 @@
 # bash-gate — build and install.
 # Override the install root for verification in a scratchpad:
-#   make install PREFIX=/tmp/cbr-test
+#   make install PREFIX=/tmp/bg-test
 
-PREFIX ?= $(HOME)/.claude-bash-rules
+PREFIX ?= $(HOME)/.bash-gate
 
 ENGINE := $(PREFIX)/engine
 GLOBAL := $(PREFIX)/global
@@ -55,10 +55,13 @@ install: build
 	if [ ! -f "$(GLOBAL)/rules" ]; then \
 		cp conf/global-rules.starter "$(GLOBAL)/rules"; \
 		echo "installed starter rules -> $(GLOBAL)/rules"; \
-		CLAUDE_BASH_RULES_DIR="$(PREFIX)" "$(ENGINE)/bash-gate" attest --global; \
+		BASH_GATE_DIR="$(PREFIX)" "$(ENGINE)/bash-gate" attest --global; \
 	else \
 		echo "kept existing rules  -> $(GLOBAL)/rules"; \
 		echo "(re-attest with: bash-gate attest --global, if you edited them)"; \
+	fi
+	@if [ -d "$(HOME)/.claude-bash-rules" ]; then \
+		echo "NOTE: old install dir ~/.claude-bash-rules found — rename it to ~/.bash-gate"; \
 	fi
 	@echo "engine installed     -> $(ENGINE)"
 	@echo "register the hook (command: $(ENGINE)/gate.sh) in ~/.claude/settings.json"

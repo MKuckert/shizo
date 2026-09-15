@@ -149,7 +149,7 @@ func TestConfigLoadErrors(t *testing.T) {
 }
 
 // setupSelfcheck builds a temp install root with a clean global/rules,
-// engine/ and logs/ dirs, and points HOME + CLAUDE_BASH_RULES_DIR at it.
+// engine/ and logs/ dirs, and points HOME + BASH_GATE_DIR at it.
 func setupSelfcheck(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -160,9 +160,9 @@ func setupSelfcheck(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "attestations"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CLAUDE_BASH_RULES_DIR", root)
-	t.Setenv("HOME", root) // logDir() is always $HOME/.claude-bash-rules/logs
-	if err := os.MkdirAll(filepath.Join(root, ".claude-bash-rules", "logs"), 0o755); err != nil {
+	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("HOME", root) // logDir() is always $HOME/.bash-gate/logs
+	if err := os.MkdirAll(filepath.Join(root, ".bash-gate", "logs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return root

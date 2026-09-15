@@ -19,14 +19,14 @@ const attestUsage = `bash-gate attest — record operator approval of a rule tie
 usage: bash-gate attest --global
        bash-gate attest [FILE]
 
---global attests the resolved global tier ($CLAUDE_BASH_RULES_DIR/global/rules),
+--global attests the resolved global tier ($BASH_GATE_DIR/global/rules),
 snapshotting the live PATH intersected with the trust-dir set alongside the
 rules hash. With no --global, attests the project tier at FILE (default:
-<cwd>/.claude-bash-rules).
+<cwd>/.bash-gate).
 
 Run this outside the sandbox, after reviewing the rules. The hook recomputes
 the hash on every command and denies everything on any divergence. Writes to
-$CLAUDE_BASH_RULES_DIR/attestations/. Never touches the hook pipeline.`
+$BASH_GATE_DIR/attestations/. Never touches the hook pipeline.`
 
 func runAttest(args []string, stdout, stderr io.Writer) int {
 	global := false

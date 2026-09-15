@@ -2,7 +2,7 @@
 
 ## Problem
 
-Rule files (`global/rules`, `.claude-bash-rules`) and attestations are plain
+Rule files (`global/rules`, `.bash-gate`) and attestations are plain
 text with no editor highlighting. Directives, allow/deny, `ANY`/`HAS`, comments
 — all render as unformatted text.
 
@@ -19,7 +19,7 @@ tree-sitter grammar is heavier — save it for if/when a language server lands.
   actions (`allow`, `deny`), wildcards (`ANY`, `HAS`), and single-quoted
   literals.
 - New `conf/editor/bash-gate.tmLanguage.json` language config: file
-  associations (`**/global/rules`, `**/.claude-bash-rules`), comment toggling.
+  associations (`**/global/rules`, `**/.bash-gate`), comment toggling.
 - `README.md`: one-line "Editor support" note pointing at `conf/editor/`.
 
 ## Not included

@@ -4,7 +4,7 @@
 # The one honoured non-JSON stdout is the literal `defer` sentinel (returntype
 # automode), mapped to empty output. See PLAN §2.2.
 dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-log="$HOME/.claude-bash-rules/logs"
+log="$HOME/.bash-gate/logs"
 mkdir -p "$log" 2>/dev/null
 
 # No decision may run unlogged: if the log dir is not writable (it is read-only

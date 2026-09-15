@@ -23,7 +23,7 @@ under `plans/`.
 ```sh
 make test         # cd src && go test ./...  — run before every commit
 make build        # -> dist/bash-gate
-make install      # installs to $HOME/.claude-bash-rules (never clobbers rules)
+make install      # installs to $HOME/.bash-gate (never clobbers rules)
 make install PREFIX=/tmp/x   # install elsewhere for verification
 ```
 

@@ -120,10 +120,10 @@ func TestGateDenyJSONExit2(t *testing.T) {
 
 // A non-writable log dir must fail closed with a specific deny (no command runs
 // unlogged), not fall through to the binary's decision. Here HOME's
-// .claude-bash-rules is a regular file, so mkdir of logs/ fails.
+// .bash-gate is a regular file, so mkdir of logs/ fails.
 func TestGateUnwritableLogDirDenies(t *testing.T) {
 	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ".claude-bash-rules"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".bash-gate"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Even if the (unreached) binary would allow, the gate must deny.
