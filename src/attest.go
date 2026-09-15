@@ -53,6 +53,13 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// attest writes to $BASH_GATE_DIR/attestations/, outside the sandbox's
+	// writable set — the raw os error is opaque, so bail early with a hint.
+	if os.Getenv("NONO_CAP_FILE") != "" {
+		fmt.Fprintln(stderr, "attest: this command must be run outside the sandbox")
+		return 1
+	}
+
 	path := file
 	if global {
 		path = globalRulesPath()

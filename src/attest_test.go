@@ -294,6 +294,17 @@ func TestDangerouslyNoneSkipsAttestation(t *testing.T) {
 	}
 }
 
+func TestRunAttestInsideSandboxRefuses(t *testing.T) {
+	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
+	var out, errb bytes.Buffer
+	if rc := runAttest([]string{"--global"}, &out, &errb); rc != 1 {
+		t.Errorf("attest inside sandbox: rc=%d, want 1", rc)
+	}
+	if !strings.Contains(errb.String(), "must be run outside the sandbox") {
+		t.Errorf("missing sandbox hint: %q", errb.String())
+	}
+}
+
 func TestRunAttestRejectsMalformedRules(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("BASH_GATE_DIR", root)

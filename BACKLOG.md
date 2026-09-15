@@ -1,4 +1,3 @@
-- [ ] [Make error messages better when attempting to attest from within a sandbox](plans/drafts/PLAN-attest-sandbox-errors.md)
 - [ ] [Some nice colors in the outputs of `validate`, `attest`, `test` and `selfcheck`](plans/drafts/PLAN-output-colors.md)
 - [ ] [Syntax highlighting for rule files](plans/drafts/PLAN-syntax-highlighting.md)
 - [ ] [Add go releaser and gitlab ci](plans/drafts/PLAN-goreleaser-gitlab-ci)
