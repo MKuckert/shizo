@@ -1,4 +1,4 @@
-module bccsandbox/bash-gate
+module bash-gate
 
 go 1.27.0
 
