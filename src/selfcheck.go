@@ -200,11 +200,14 @@ func configLoadErrors(root string) []string {
 }
 
 func renderSelfcheck(w io.Writer, results []checkResult) {
+	col := newColorer(w)
 	allPass := true
 	for _, r := range results {
-		status := "PASS"
-		if !r.Pass {
-			status = "FAIL"
+		var status string
+		if r.Pass {
+			status = col.success("PASS")
+		} else {
+			status = col.error("FAIL")
 			allPass = false
 		}
 		line := fmt.Sprintf("%-4s %s", status, r.Name)
@@ -214,8 +217,8 @@ func renderSelfcheck(w io.Writer, results []checkResult) {
 		fmt.Fprintln(w, line)
 	}
 	if allPass {
-		fmt.Fprintln(w, "selfcheck: PASS")
+		fmt.Fprintln(w, "selfcheck: "+col.success("PASS"))
 	} else {
-		fmt.Fprintln(w, "selfcheck: FAIL")
+		fmt.Fprintln(w, "selfcheck: "+col.error("FAIL"))
 	}
 }

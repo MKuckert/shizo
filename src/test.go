@@ -119,14 +119,16 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // renderTest prints the decision, reason, and a per-command breakdown.
 func renderTest(w io.Writer, outcome Outcome, reason string, logs []cmdLog) {
-	fmt.Fprintf(w, "decision: %s\n", outcome)
+	col := newColorer(w)
+	fmt.Fprintf(w, "decision: %s\n", colorDecision(col, string(outcome)))
 	fmt.Fprintf(w, "reason:   %s\n", reason)
 	if len(logs) == 0 {
 		return
 	}
 	fmt.Fprintln(w, "commands:")
 	for _, cl := range logs {
-		line := fmt.Sprintf("  %-5s %s", cl.Decision, strings.Join(cl.Argv, " "))
+		padded := fmt.Sprintf("%-5s", cl.Decision)
+		line := "  " + colorDecision(col, padded) + " " + strings.Join(cl.Argv, " ")
 		if cl.Resolved != "" {
 			line += "  (" + cl.Resolved + ")"
 		}
@@ -134,5 +136,16 @@ func renderTest(w io.Writer, outcome Outcome, reason string, logs []cmdLog) {
 			line += "  [" + cl.Rule + "]"
 		}
 		fmt.Fprintln(w, line)
+	}
+}
+
+func colorDecision(col colorer, s string) string {
+	switch strings.TrimSpace(s) {
+	case "deny":
+		return col.error(s)
+	case "allow":
+		return col.success(s)
+	default:
+		return col.warning(s)
 	}
 }

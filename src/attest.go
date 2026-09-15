@@ -111,7 +111,8 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "attest: %s\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "attested %s tier %s -> %s\n", tier, path, recordPath)
+	col := newColorer(stdout)
+	fmt.Fprintln(stdout, col.success(fmt.Sprintf("attested %s tier %s -> %s", tier, path, recordPath)))
 	return 0
 }
 

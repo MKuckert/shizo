@@ -287,23 +287,29 @@ func denyShadowsAllow(a, d rule) bool {
 // report prints findings grouped in encounter order and returns the exit code:
 // 1 if any error, else 0.
 func report(w io.Writer, findings []finding) int {
+	col := newColorer(w)
 	errors, warnings := 0, 0
 	for _, f := range findings {
+		var lvl string
 		switch f.level {
 		case levelError:
 			errors++
-		case levelWarn:
+			lvl = col.error(f.level.String())
+		default:
 			warnings++
+			lvl = col.warning(f.level.String())
 		}
 		if f.line > 0 {
-			fmt.Fprintf(w, "%s:%d: %s: %s\n", f.file, f.line, f.level, f.msg)
+			fmt.Fprintf(w, "%s:%d: %s: %s\n", f.file, f.line, lvl, f.msg)
 		} else {
-			fmt.Fprintf(w, "%s: %s: %s\n", f.file, f.level, f.msg)
+			fmt.Fprintf(w, "%s: %s: %s\n", f.file, lvl, f.msg)
 		}
 	}
-	fmt.Fprintf(w, "%d error(s), %d warning(s)\n", errors, warnings)
+	summary := fmt.Sprintf("%d error(s), %d warning(s)", errors, warnings)
 	if errors > 0 {
+		fmt.Fprintln(w, col.error(summary))
 		return 1
 	}
+	fmt.Fprintln(w, col.success(summary))
 	return 0
 }

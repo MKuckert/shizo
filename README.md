@@ -204,3 +204,9 @@ Setting `GATE_DEBUG` makes `gate.sh` mirror the raw hook JSON to
 `logs/stdin.log`. That file contains attacker-controlled command text and any
 secrets passed as argv. Leave it unset in normal operation; gitignore/rotate
 `stdin.log` so it never lands in a commit.
+
+## NO_COLOR
+
+Operator commands (`validate`, `test`, `selfcheck`, `attest`) use ANSI colors
+when writing to a terminal. Set `NO_COLOR` to any non-empty value to suppress
+them (see [no-color.org](https://no-color.org)).
