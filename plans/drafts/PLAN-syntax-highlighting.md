@@ -26,6 +26,5 @@ tree-sitter grammar is heavier — save it for if/when a language server lands.
 
 - VS Code extension packaging — the grammar works via "Install from VSIX" or
   a manual copy to `~/.vscode/extensions/`. Package later if demand appears.
-- tree-sitter grammar, LSP, or completion (see rejected
-  `PLAN-2026-09-10-language-server.md`).
+- tree-sitter grammar, LSP, or completion (see `PLAN-language-server.md`).
 - Vim/Neovim ftdetect — add when someone asks.
