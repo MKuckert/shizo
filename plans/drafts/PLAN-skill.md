@@ -11,25 +11,14 @@ four `docs/` files. A Skill can drive it on demand.
 
 ## Shape (per writing-for-agents)
 
-Trigger-rich `description`; thin body that **delegates** to `docs/` and the
-tooling (`validate`, `test`, `selfcheck`, `conf/nono-profile.example.json`) —
-don't duplicate `RULES.md`.
+Trigger-rich `description`; thin body that includes most-relevant parts of `docs/`
+and tooling (`validate`, `test`, `selfcheck`, `conf/nono-profile.example.json`) —
+duplicate `RULES.md` where necessary.
 
-## Options
-
-- **A. One `bash-gate` skill with task sections (pick).** Install → author rules
-  → sandbox setup, each ending in a verify step (`validate` / `test` /
-  `selfcheck`) and a link into the relevant doc. Plus a "command unexpectedly
-  denied" path: `bash-gate test --json '<cmd>'`, read the reason, map to
-  `EVALUATION.md` steps.
-- **B. Three separate skills.** Over-fragmented; the tasks chain. Rejected.
-- **C. More prose in README/CLAUDE.** The TODO wants an invocable skill.
-  Rejected.
-
-## Pick: A
-
-Depends on the `validate`/`test`/`selfcheck` subcommands + example profile —
-sequence it after those plans.
+One `bash-gate` skill with task sections. Install → author rules → sandbox setup,
+each ending in a verify step (`validate` / `test` / `selfcheck`) and a link into
+the relevant doc. Plus a "command unexpectedly denied" path:
+`bash-gate test --json '<cmd>'`, read the reason, map to `EVALUATION.md` steps.
 
 ## Changes
 
@@ -40,6 +29,4 @@ sequence it after those plans.
 
 ## Open
 
-- Name `bash-gate` vs `bash-gate-setup` — lean `bash-gate` (covers authoring +
-  debugging too).
 - Repo-local `.claude/skills/` only for now; packaging later.
