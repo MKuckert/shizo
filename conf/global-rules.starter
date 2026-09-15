@@ -74,6 +74,9 @@ deny curl HAS -F
 deny curl HAS --upload-file
 deny wget HAS --post-data
 
+# no symlinks to prevent bypass of the gate
+deny ln ANY
+
 # none of this commands as those allow arbitrary code execution
 deny ssh ANY
 deny python ANY
