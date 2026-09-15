@@ -1,4 +1,3 @@
-- [ ] [Syntax highlighting for rule files](plans/drafts/PLAN-syntax-highlighting.md)
 - [ ] [Add go releaser and gitlab ci](plans/drafts/PLAN-goreleaser-gitlab-ci)
 - [ ] Better explanation in README and the docs overall (reword with Sol)
 - [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)

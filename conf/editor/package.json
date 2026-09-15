@@ -1,0 +1,41 @@
+{
+  "name": "bash-gate",
+  "displayName": "bash-gate rules",
+  "description": "Syntax highlighting for bash-gate rule files",
+  "author": {
+    "name": "Martin Kuckert"
+  },
+  "publisher": "mkuckert",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bash-gate",
+        "aliases": [
+          "bash-gate rules"
+        ],
+        "filenames": [
+          ".bash-gate",
+          "global-rules.starter"
+        ],
+        "filenamePatterns": [
+          "**/.bash-gate/global/rules"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bash-gate",
+        "scopeName": "source.bash-gate",
+        "path": "./bash-gate.tmLanguage.json"
+      }
+    ]
+  }
+}

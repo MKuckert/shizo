@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "bash-gate rules",
+  "scopeName": "source.bash-gate",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#directive" },
+    { "include": "#action" },
+    { "include": "#string-single" },
+    { "include": "#string-double" },
+    { "include": "#wildcard" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^\\s*#.*$",
+      "name": "comment.line.number-sign.bash-gate"
+    },
+    "directive": {
+      "match": "^\\s*(returntype|sandbox|trust)\\b",
+      "captures": {
+        "1": { "name": "keyword.other.directive.bash-gate" }
+      }
+    },
+    "action": {
+      "match": "^\\s*(allow|deny)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.bash-gate" }
+      }
+    },
+    "wildcard": {
+      "match": "\\b(ANY|HAS)\\b",
+      "name": "constant.language.bash-gate"
+    },
+    "string-single": {
+      "match": "'[^']*'",
+      "name": "string.quoted.single.bash-gate"
+    },
+    "string-double": {
+      "match": "\"[^\"]*\"",
+      "name": "string.quoted.double.bash-gate"
+    }
+  }
+}

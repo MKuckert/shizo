@@ -210,3 +210,15 @@ secrets passed as argv. Leave it unset in normal operation; gitignore/rotate
 Operator commands (`validate`, `test`, `selfcheck`, `attest`) use ANSI colors
 when writing to a terminal. Set `NO_COLOR` to any non-empty value to suppress
 them (see [no-color.org](https://no-color.org)).
+
+## Editor support
+
+[`conf/editor/`](conf/editor/) contains a TextMate grammar for syntax
+highlighting of rule files in VS Code, Sublime Text, and other
+TextMate-compatible editors.
+
+For VS Code, symlink the directory into your extensions folder and reload:
+
+```sh
+ln -s /path/to/bash-gate/conf/editor ~/.vscode/extensions/bash-gate
+```

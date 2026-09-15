@@ -71,7 +71,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `bash-gate attest` — operator-only; writes/reads `.attest` records |
 | `gate.sh`       | wrapper installed as the hook `command`; fails closed      |
-| `conf/`         | starter global rules + example Claude settings             |
+| `conf/`         | starter global rules, example Claude settings, editor grammar |
 
 ## Rules DSL (see `docs/RULES.md`)
 
