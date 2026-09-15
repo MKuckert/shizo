@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude"],
   "meta": {
     "name": "bash-gate-claude",
-    "version": "4"
+    "version": "5"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -61,7 +61,7 @@
       "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "5",
       "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "3",
       "CLAUDE_CODE_MAX_TURNS": "200",
-      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
+      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "0",
       "CLAUDE_CODE_RESUME_INTERRUPTED_TURN": "0",
       "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
       "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
