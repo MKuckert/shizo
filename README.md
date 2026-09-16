@@ -14,6 +14,9 @@ cannot verify statically is denied.
 
 ## Install
 
+The `/bash-gate` Claude Code skill walks through each step below interactively,
+including rule authoring, sandbox configuration, and troubleshooting.
+
 ```sh
 make test
 make install                 # $HOME/.bash-gate

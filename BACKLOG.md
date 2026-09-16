@@ -1,4 +1,3 @@
-- [ ] [Add a Skill to help with rules, nono sandbox and hook installation](plans/drafts/PLAN-skill.md)
 - [ ] [Nice presentation website for the tool](plans/drafts/PLAN-presentation-website.md)
 - [ ] Find alpha tester?
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
