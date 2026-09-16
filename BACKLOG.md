@@ -3,3 +3,6 @@
 - [ ] Find alpha tester?
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [ ] [A proper language server](plans/drafts/PLAN-language-server.md)
+- [ ] Install docs with `make install` and `bash-gate docs` (or similar) to view them locally
+- [ ] Perform default deny list crosscheck (https://github.com/karanb192/claude-code-hooks/blob/main/plugins/block-dangerous-commands/block-dangerous-commands.js)
+- [ ] Expand to other harnesses (see [pretooluse-hook-equivalents research](docs/research/pretooluse-hook-equivalents.md))
