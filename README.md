@@ -1,9 +1,46 @@
 # bash-gate
 
-`bash-gate` is a fail-closed Claude Code `PreToolUse` hook for Bash. It parses
-shell syntax, extracts every command from pipelines and command lists, resolves
-executables through `PATH`, and applies an argv-based rule set. Anything it
-cannot verify statically is denied.
+`bash-gate` is a fail-closed `PreToolUse` hook for Agentic Harnesses providing
+a Bash tool. It parses shell syntax, extracts every command from pipelines and
+command lists, resolves executables through `PATH`, and applies an argv-based
+rule set. Anything it cannot verify statically is denied.
+
+## Why?
+
+Every Bash tool call in an Agentic Harness like _Claude Code_ passes through a
+permission check. Without policy, the operator sees every command and must decide
+in real time: safe or not. That constant prompting causes two kinds of fatigue.
+
+- **Operator fatigue:** a human who approves hundreds of `git status` and `ls`
+  invocations stops reading them, and a dangerous command slips through on muscle
+  memory.
+- **Model fatigue:** the model forgets its instructions from AGENTS.md or other
+  files mid-conversion. They are no hard rules, more like a checklist, a guardrail.
+  The model may issue dangerous commands because it forgot the policy or misread
+  the prompt.
+
+Most commands fall into two obvious buckets. `git status` is always fine.
+`curl | bash` is never fine. Only a narrow middle band — an unfamiliar flag, a
+write to an unexpected path, a tool the policy author hasn't reviewed — deserves
+a human decision. `bash-gate` encodes the obvious buckets as rules so that
+operators only see what actually requires judgment.
+
+The design depends on two deployment properties:
+
+- **The agent runs inside an OS sandbox.** Normally `nono`, the sandbox protects
+  the engine, global rules, and attestations from writes while limiting
+  filesystem and network reach. `bash-gate` supplements that boundary; it does
+  not replace it.
+- **Shell state does not persist between tool calls** and hook input `cwd`
+  reflects the command's actual working directory. These properties make it
+  practical to reject assignments and functions and meaningful to enforce
+  redirect containment and relative-path resolution.
+
+Together, the sandbox and the static rule layer produce three outcomes:
+- **allow** for known-safe commands (no prompt),
+- **deny** for known-dangerous commands (blocked before execution)
+- and **ask** for everything else (the human or harness auto classifier decides).
+  The goal is to shrink that third bucket until it contains only genuine decisions.
 
 ## Documentation
 
