@@ -1,5 +1,4 @@
 - Rename `bash-gate` to `shizo` (Shell Isolation / Schizoid)
-- Set and document `CLAUDE_CODE_THRIFTY_SONIC=0`
 - [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
 - Find alpha tester?
 - [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
@@ -12,3 +11,4 @@
 - Add `bash-gate info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
 - Add setting to deny stdin redirection at the AST level. bash-gate already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
 - Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar. This is a known attack vector for shell injection.
+- Add a `ask` rule to enforce something like `rm -rf` to always asked the operator, even if the base command is allowed.

@@ -27,10 +27,10 @@ operators only see what actually requires judgment.
 
 The design depends on two deployment properties:
 
-- **The agent runs inside an OS sandbox.** Normally `nono`, the sandbox protects
-  the engine, global rules, and attestations from writes while limiting
-  filesystem and network reach. `bash-gate` supplements that boundary; it does
-  not replace it.
+- **The agent runs inside an OS sandbox.** Normally [`nono`](https://nono.sh/),
+  the sandbox protects the engine, global rules, and attestations from writes
+  while limiting filesystem and network reach. `bash-gate` supplements that
+  boundary; it does not replace it.
 - **Shell state does not persist between tool calls** and hook input `cwd`
   reflects the command's actual working directory. These properties make it
   practical to reject assignments and functions and meaningful to enforce
@@ -98,6 +98,16 @@ The installed layout is:
 `$BASH_GATE_DIR` selects another install root for operator commands. Hook mode
 uses the account home directory instead, preventing environment-based policy
 redirection. Logs always remain below `$HOME`.
+
+## Claude Code Automode
+
+You'd like to set the env var `CLAUDE_CODE_THRIFTY_SONIC=0` if you're using claude codes
+_auto mode_ to prevent the system prompt containing instructions to excessively prefer
+the `Bash` tool for file reads and edits over the `Read` and `Edit` tools. Otherwise the
+models are likely to issue commands that are denied by the hook, e.g. using `python3` or
+similar to read and edit files. This is meant to lower token usage and cost, but it can be counterproductive if the model is issuing commands that are denied by the hook.
+
+Also, file changes made through `Bash` tool are not safely reversible by `/rewind`.
 
 ## Rules
 
