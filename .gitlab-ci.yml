@@ -1,5 +1,6 @@
 stages:
   - test
+  - pages
   - release
 
 test:
@@ -9,6 +10,19 @@ test:
     - docker
   script:
     - make test
+
+pages:
+  stage: pages
+  image: golang:1.27
+  tags:
+    - docker
+  script:
+    - make site
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_DEFAULT_BRANCH == $CI_COMMIT_BRANCH
 
 release:
   stage: release
