@@ -63,9 +63,13 @@ deny git submodule update
 deny git hook ANY
 deny git credential ANY
 deny git clone ANY
+deny git clean HAS -f
+deny git checkout .
 
-# no execution of arbitrary commands via find
+# no execution of arbitrary commands
 deny find HAS -exec
+deny rg HAS --pre
+deny tar HAS --checkpoint-action
 
 # no data exfiltration
 deny curl HAS -d
@@ -77,17 +81,31 @@ deny wget HAS --post-data
 # no symlinks to prevent bypass of the gate
 deny ln ANY
 
+# no destructive commands
+deny rm HAS -rf
+deny dd ANY
+deny mkfs ANY
+
 # none of this commands as those allow arbitrary code execution
 deny ssh ANY
 deny python ANY
-deny pip install ANY
+deny python3 ANY
+deny pip ANY
 deny ruby ANY
 deny perl ANY
+deny swift ANY
+deny osascript ANY
+deny expect ANY
+deny tclsh ANY
+deny wish ANY
+deny m4 ANY
 deny php ANY
+deny sh ANY
+deny zsh ANY
 deny bash ANY
 deny node ANY
+deny npm ANY
 deny npx ANY
-deny npm install ANY
+deny bun ANY
 deny bunx ANY
-deny bun install ANY
 deny make ANY
