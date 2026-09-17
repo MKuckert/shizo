@@ -1,10 +1,10 @@
-- Rename `bash-gate` to `shizo` (Shell Isolation / Schizoid)
+- Perform default deny list crosscheck (https://github.com/karanb192/claude-code-hooks/blob/main/plugins/block-dangerous-commands/block-dangerous-commands.js)
+- [Rename `bash-gate` to `shizo` (Shell Isolation / Schizoid)](plans/drafts/PLAN-rename-to-shizo.md)
 - [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
 - Find alpha tester?
 - [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [A proper language server](plans/drafts/PLAN-language-server.md)
 - Install docs with `make install` and `bash-gate docs` (or similar) to view them locally
-- Perform default deny list crosscheck (https://github.com/karanb192/claude-code-hooks/blob/main/plugins/block-dangerous-commands/block-dangerous-commands.js)
 - Expand to other harnesses (see [pretooluse-hook-equivalents research](docs/research/pretooluse-hook-equivalents.md))
 - Add `bash-gate install claude-hook`
 - Rename `bash-gate claude-hook` to `bash-gate hook pretooluse` to make it harness agnostic
