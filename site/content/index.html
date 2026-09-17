@@ -1,0 +1,115 @@
+<section class="hero">
+    <div class="container">
+        <h1>Control what your AI agent can run.</h1>
+        <p class="subtitle">Fail-closed Bash allowlisting for Claude Code.</p>
+        <p class="hero-detail">
+            <code>bash-gate</code> is a <code>PreToolUse</code> hook that parses
+            shell syntax, resolves executables, and matches commands against a
+            line-oriented rule set. Anything it cannot statically verify is
+            denied.
+        </p>
+        <div class="cta-row">
+            <a
+                href="https://gitlab.ssc-os.local/mkuckert/bash-gate"
+                class="btn btn-primary"
+                >View on GitLab</a
+            >
+            <div class="cta-install">
+                <code>make install</code>
+            </div>
+            <span class="btn btn-muted" aria-disabled="true"
+                >Download <small>(coming soon)</small></span
+            >
+        </div>
+    </div>
+</section>
+
+<section class="pipeline">
+    <div class="container">
+        <h2>How it works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <h3>Parse</h3>
+                <p>
+                    Full shell syntax parse — pipes, chains, subshells,
+                    redirections.
+                </p>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <h3>Resolve</h3>
+                <p>
+                    Every command is resolved against <code>PATH</code> and a
+                    trusted-directory set.
+                </p>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <h3>Sandbox check</h3>
+                <p>
+                    Verify the sandbox capability file is present; deny
+                    everything otherwise.
+                </p>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <h3>Match rules</h3>
+                <p>
+                    Argv tokens matched against allow/deny rules with
+                    <code>ANY</code> and <code>HAS</code> wildcards.
+                </p>
+            </div>
+            <div class="step">
+                <div class="step-num">5</div>
+                <h3>Decide</h3>
+                <p>
+                    A deny always wins. Unmatched commands fall through to
+                    <code>ask</code>.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="rules-glance">
+    <div class="container">
+        <h2>Rules at a glance</h2>
+        <pre
+            class="code-block"
+        ><code><span class="c"># Directives (global tier only)</span>
+<span class="k">sandbox</span> nono
+<span class="k">trust</span>   /usr/bin
+<span class="k">trust</span>   /opt/homebrew/bin
+
+<span class="c"># Allow safe reads</span>
+<span class="a">allow</span> git status ANY
+<span class="a">allow</span> git log ANY
+<span class="a">allow</span> git diff ANY
+
+<span class="c"># Block destructive operations</span>
+<span class="d">deny</span> git push ANY
+<span class="d">deny</span> git reset HAS --hard</code></pre>
+        <p class="rules-link">
+            Full DSL reference:
+            <a
+                href="https://gitlab.ssc-os.local/mkuckert/bash-gate/-/blob/main/docs/RULES.md"
+                >docs/RULES.md</a
+            >
+        </p>
+    </div>
+</section>
+
+<footer class="site-footer">
+    <div class="container">
+        <div class="footer-row">
+            <span>bash-gate</span>
+            <a href="https://gitlab.ssc-os.local/mkuckert/bash-gate">GitLab</a>
+            <span>MIT License</span>
+            <span class="nono-credit"
+                >Designed for the
+                <a href="https://nono.sh">nono sandbox</a></span
+            >
+        </div>
+    </div>
+</footer>

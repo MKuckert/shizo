@@ -1,4 +1,3 @@
-- [ ] [Nice presentation website for the tool](plans/drafts/PLAN-presentation-website.md)
 - [ ] [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
 - [ ] Find alpha tester?
 - [ ] [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)

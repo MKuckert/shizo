@@ -1,0 +1,243 @@
+// -- Variables --
+$bg:          #0a0a0f;
+$bg-surface:  #12121a;
+$text:        #e0e0e8;
+$text-muted:  #888894;
+$accent:      #2dd4bf;
+$accent-glow: rgba(45, 212, 191, 0.15);
+$mono:        "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+$sans:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$breakpoint:  768px;
+$max-width:   960px;
+
+// -- Reset & base --
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: $sans;
+  background: $bg;
+  color: $text;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: $max-width;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+a {
+  color: $accent;
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+code {
+  font-family: $mono;
+  font-size: 0.9em;
+  background: $bg-surface;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+// -- Hero --
+.hero {
+  padding: 6rem 0 4rem;
+  text-align: center;
+
+  h1 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    background: linear-gradient(135deg, $text 40%, $accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: $text-muted;
+    margin-top: 0.75rem;
+  }
+
+  .hero-detail {
+    max-width: 600px;
+    margin: 1.5rem auto 0;
+    color: $text-muted;
+    font-size: 1rem;
+  }
+}
+
+.cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.4rem;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: $accent;
+  color: $bg;
+  &:hover {
+    background: lighten($accent, 8%);
+    text-decoration: none;
+  }
+}
+
+.btn-muted {
+  background: $bg-surface;
+  color: $text-muted;
+  cursor: default;
+  small { font-size: 0.8em; opacity: 0.7; }
+}
+
+.cta-install {
+  background: $bg-surface;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.6rem 1.4rem;
+  code {
+    background: none;
+    padding: 0;
+    color: $accent;
+    font-size: 0.95rem;
+  }
+}
+
+// -- Pipeline steps --
+.pipeline {
+  padding: 4rem 0;
+
+  h2 {
+    text-align: center;
+    font-size: 1.6rem;
+    margin-bottom: 2.5rem;
+  }
+}
+
+.steps {
+  display: flex;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.step {
+  flex: 1;
+  background: $bg-surface;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: $accent-glow;
+    color: $accent;
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    font-size: 0.85rem;
+    color: $text-muted;
+    line-height: 1.5;
+  }
+}
+
+// -- Rules code block --
+.rules-glance {
+  padding: 4rem 0;
+
+  h2 {
+    text-align: center;
+    font-size: 1.6rem;
+    margin-bottom: 2rem;
+  }
+
+  .rules-link {
+    text-align: center;
+    margin-top: 1.5rem;
+    color: $text-muted;
+    font-size: 0.9rem;
+  }
+}
+
+.code-block {
+  background: $bg-surface;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  overflow-x: auto;
+  font-family: $mono;
+  font-size: 0.88rem;
+  line-height: 1.7;
+
+  code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .c { color: $text-muted; }
+  .k { color: $accent; }
+  .a { color: #4ade80; }
+  .d { color: #f87171; }
+}
+
+// -- Footer --
+.site-footer {
+  padding: 3rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  font-size: 0.85rem;
+  color: $text-muted;
+  flex-wrap: wrap;
+}
+
+// -- Responsive --
+@media (max-width: $breakpoint) {
+  .hero h1 { font-size: 2rem; }
+  .hero { padding: 4rem 0 2.5rem; }
+
+  .steps {
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .cta-row { flex-direction: column; }
+}

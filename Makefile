@@ -23,7 +23,9 @@ LDFLAGS     := -s -w -X main.version=$(VERSION)
 # is bash and it relies on the nono sandbox) — drop it if you don't need it.
 PLATFORMS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
 
-.PHONY: build release test install clean
+SSG_SRC := cmd/ssg
+
+.PHONY: build release test install clean site
 
 build:
 	mkdir -p "$(DIST)"
@@ -66,5 +68,9 @@ install: build
 	@echo "engine installed     -> $(ENGINE)"
 	@echo "register the hook (command: $(ENGINE)/gate.sh) in ~/.claude/settings.json"
 
+site:
+	cd "$(SSG_SRC)" && go run . -root ../.. build
+
 clean:
 	if [ -d "$(DIST)" ]; then rm -r "$(DIST)"; fi
+	if [ -d "public" ]; then rm -r "public"; fi

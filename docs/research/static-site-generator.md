@@ -1,6 +1,6 @@
 # Static Site Generator — Research: HTML + SCSS/SASS, Go, minimal deps
 
-Date: 2026-07 (research pass)
+Date: 2026-09-16
 Goal: find possible, *simple* solutions for a static website generator with
 - HTML as the base content/template format
 - SCSS/SASS support in the pipeline
