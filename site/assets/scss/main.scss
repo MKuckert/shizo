@@ -173,6 +173,37 @@ code {
   }
 }
 
+// -- Operator fatigue --
+.fatigue {
+  padding: 4rem 0;
+
+  h2 {
+    text-align: center;
+    font-size: 1.6rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .fatigue-intro {
+    text-align: center;
+    color: $text-muted;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+  }
+
+  .fatigue-caption {
+    text-align: center;
+    color: $text-muted;
+    max-width: 600px;
+    margin: 1.5rem auto 0;
+    font-size: 0.9rem;
+  }
+}
+
+.code-block--tall {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
 // -- Rules code block --
 .rules-glance {
   padding: 4rem 0;

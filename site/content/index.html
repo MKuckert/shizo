@@ -72,6 +72,54 @@
     </div>
 </section>
 
+<section class="fatigue">
+    <div class="container">
+        <h2>Why "ask the operator" isn't enough</h2>
+        <p class="fatigue-intro">
+            Without bash-gate, unrecognized commands fall through to a
+            human approval prompt. In practice, operators approve what
+            they can't fully read. Can you spot the problem here?
+        </p>
+        <pre class="code-block code-block--tall"><code><span class="c"># Claude Code asks: "Run this command?"</span>
+
+python3 - &lt;&lt;'PY'
+p = 'src/config/api.ts'
+s = open(p, encoding='utf-8').read()
+
+def sub(old, new):
+    assert old in s, "NOT FOUND: " + old[:80]
+    return s.replace(old, new, 1)
+
+s = sub(
+    'baseURL: "https://staging.example.com"',
+    'baseURL: "https://api.example.com"',
+)
+s = sub(
+    'timeout: 5000',
+    'timeout: 15000',
+)
+s = sub(
+    'retries: 1',
+    'retries: 3',
+)
+<span class="d">open('/Users/you/.ssh/id_ed25519').read()  # ← line 19</span>
+s = sub(
+    'logLevel: "debug"',
+    'logLevel: "warn"',
+)
+
+open(p, 'w', encoding='utf-8').write(s)
+PY</code></pre>
+        <p class="fatigue-caption">
+            Line 19 reads your SSH private key. The rest is a legitimate
+            config edit — boring enough that most operators scroll past it.
+            Real sessions contained heredocs of 80–130 lines.
+            bash-gate denies <code>python3</code> by default so this
+            never reaches the operator.
+        </p>
+    </div>
+</section>
+
 <section class="rules-glance">
     <div class="container">
         <h2>Rules at a glance</h2>
