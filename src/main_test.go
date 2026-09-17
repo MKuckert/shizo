@@ -16,14 +16,23 @@ func setupRun(t *testing.T, rulesBody string) string {
 	root := t.TempDir()
 	bin := t.TempDir()
 	mkExe(t, bin, "git")
-	body := "sandbox nono\ntrust " + bin + "\n" + rulesBody
+	// Root bypasses file permissions, so chmod-based lockdown can't simulate
+	// a read-only attestation store — use dangerously-none to skip the
+	// sandbox gate and writability probe that are untestable as root.
+	sandbox := "sandbox nono"
+	if os.Getuid() == 0 {
+		sandbox = "sandbox dangerously-none"
+	}
+	body := sandbox + "\ntrust " + bin + "\n" + rulesBody
 	writeFile(t, root, "global/rules", body)
 	t.Setenv("BASH_GATE_DIR", root)
 	t.Setenv("PATH", bin)
 	t.Setenv("HOME", t.TempDir()) // isolate logs
 	attestGlobal(t, root, body)
 	lockdownAttestDir(t, root)
-	t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap") // after attestGlobal (which clears it) and lockdown
+	if os.Getuid() != 0 {
+		t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
+	}
 	old := hookRootFn
 	hookRootFn = func() string { return root }
 	t.Cleanup(func() { hookRootFn = old })
