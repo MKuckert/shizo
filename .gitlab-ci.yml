@@ -5,12 +5,16 @@ stages:
 test:
   stage: test
   image: golang:1.27
+  tags:
+    - docker
   script:
     - make test
 
 release:
   stage: release
   image: golang:1.27
+  tags:
+    - docker
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d/
   before_script:
