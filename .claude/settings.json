@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.bash-gate/engine/gate.sh"
+            "command": "$HOME/.shizo/engine/shizo.sh"
           }
         ]
       }
