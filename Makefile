@@ -74,6 +74,9 @@ install: build
 site:
 	cd "$(SSG_SRC)" && go run . -root ../.. build
 
+site-serve:
+	cd "$(SSG_SRC)" && go run . -root ../.. serve
+
 clean:
 	if [ -d "$(DIST)" ]; then rm -r "$(DIST)"; fi
 	if [ -d "public" ]; then rm -r "public"; fi
