@@ -5,7 +5,7 @@
 - Install docs with `make install` and `shizo docs` (or similar) to view them locally
 - Expand to other harnesses (see [pretooluse-hook-equivalents research](docs/research/pretooluse-hook-equivalents.md))
 - Add `shizo install claude-hook`
-- Rename `shizo claude-hook` to `shizo hook pretooluse` to make it harness agnostic
+- [Rename `shizo claude-hook` to `shizo hook pretooluse` to make it harness agnostic](plans/drafts/PLAN-rename-hook-pretooluse.md)
 - Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
 - Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
 - Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar. This is a known attack vector for shell injection.
