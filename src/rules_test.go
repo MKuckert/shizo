@@ -62,7 +62,7 @@ func TestProjectLooseningIgnored(t *testing.T) {
 	g := writeFile(t, dir, "rules", validGlobal)
 	attestGlobal(t, dir, validGlobal)
 	projRules := "trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n"
-	proj := writeFile(t, dir, ".bash-gate", projRules)
+	proj := writeFile(t, dir, ".shizo", projRules)
 	attestProject(t, dir, proj, projRules)
 	cfg := loadConfig(g, proj, installRoot())
 	if cfg.denyAll {

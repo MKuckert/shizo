@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// setupRun points BASH_GATE_DIR at a temp install with a global/rules
+// setupRun points SHIZO_DIR at a temp install with a global/rules
 // file and a trusted bin dir, and marks the process sandboxed.
 func setupRun(t *testing.T, rulesBody string) string {
 	t.Helper()
@@ -25,7 +25,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 	}
 	body := sandbox + "\ntrust " + bin + "\n" + rulesBody
 	writeFile(t, root, "global/rules", body)
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	t.Setenv("PATH", bin)
 	t.Setenv("HOME", t.TempDir()) // isolate logs
 	attestGlobal(t, root, body)
@@ -128,12 +128,12 @@ func TestRunHelp(t *testing.T) {
 		args []string
 		want string // a substring unique to the expected usage
 	}{
-		{nil, "usage: bash-gate [command]"},
-		{[]string{"claude-hook"}, "usage: bash-gate claude-hook"},
-		{[]string{"validate"}, "usage: bash-gate validate"},
-		{[]string{"test"}, "usage: bash-gate test"},
-		{[]string{"selfcheck"}, "usage: bash-gate selfcheck"},
-		{[]string{"bogus"}, "usage: bash-gate [command]"}, // unknown -> root
+		{nil, "usage: shizo [command]"},
+		{[]string{"claude-hook"}, "usage: shizo claude-hook"},
+		{[]string{"validate"}, "usage: shizo validate"},
+		{[]string{"test"}, "usage: shizo test"},
+		{[]string{"selfcheck"}, "usage: shizo selfcheck"},
+		{[]string{"bogus"}, "usage: shizo [command]"}, // unknown -> root
 	}
 	for _, c := range cases {
 		var out bytes.Buffer
@@ -194,7 +194,7 @@ func TestDispatchArglessNeverReadsStdin(t *testing.T) {
 	if rc != 0 {
 		t.Errorf("arg-less: rc=%d, want 0", rc)
 	}
-	if !strings.Contains(out.String(), "usage: bash-gate [command]") {
+	if !strings.Contains(out.String(), "usage: shizo [command]") {
 		t.Errorf("arg-less: output %q missing usage", out.String())
 	}
 	if strings.Contains(out.String(), "permissionDecision") {
@@ -210,8 +210,8 @@ func TestDefaultHookRootReturnsValidPath(t *testing.T) {
 	if !filepath.IsAbs(root) {
 		t.Errorf("defaultHookRoot should return an absolute path, got %q", root)
 	}
-	if !strings.HasSuffix(root, ".bash-gate") {
-		t.Errorf("defaultHookRoot should end in .bash-gate, got %q", root)
+	if !strings.HasSuffix(root, ".shizo") {
+		t.Errorf("defaultHookRoot should end in .shizo, got %q", root)
 	}
 }
 
@@ -222,7 +222,7 @@ func TestHookDeniesWhenStoreWritable(t *testing.T) {
 	mkExe(t, bin, "git")
 	body := "sandbox nono\ntrust " + bin + "\n" + "allow git status ANY\n"
 	writeFile(t, root, "global/rules", body)
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	t.Setenv("PATH", bin)
 	t.Setenv("HOME", t.TempDir())
 	attestGlobal(t, root, body)

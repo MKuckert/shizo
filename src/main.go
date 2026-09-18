@@ -1,4 +1,4 @@
-// Command bash-gate is a Claude Code PreToolUse hook that allowlists Bash
+// Command shizo is a Claude Code PreToolUse hook that allowlists Bash
 // commands at subcommand granularity. See PLAN-bash-allowlist.md.
 package main
 
@@ -28,13 +28,13 @@ var version = "dev"
 
 // rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
 // It indexes the operator subcommands; each owns its own detailed usage const.
-const rootUsage = `bash-gate — a Claude Code PreToolUse hook that allowlists Bash
+const rootUsage = `shizo — a Claude Code PreToolUse hook that allowlists Bash
 commands at subcommand granularity. "claude-hook" is the hook entrypoint: it
 reads hook JSON on stdin and emits a decision. Every other subcommand is
 operator-only and never touches the hook pipeline; with no arguments this
 prints usage and exits (it never reads stdin).
 
-usage: bash-gate [command] [args]
+usage: shizo [command] [args]
 
 Commands:
   claude-hook hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
@@ -47,16 +47,16 @@ Commands:
   --version   print the version (alias: -v)
   (none)      → help
 
-Rules live in $BASH_GATE_DIR (default ~/.bash-gate): the global
-tier under global/rules, an optional per-project tier at <cwd>/.bash-gate.
-See docs/RULES.md. Run "bash-gate help <command>" for per-command usage.`
+Rules live in $SHIZO_DIR (default ~/.shizo): the global
+tier under global/rules, an optional per-project tier at <cwd>/.shizo.
+See docs/RULES.md. Run "shizo help <command>" for per-command usage.`
 
 func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
 // dispatch routes operator subcommands; "claude-hook" is the hook entrypoint
-// (what gate.sh invokes). Arg-less prints usage and exits — it never reads
+// (what shizo.sh invokes). Arg-less prints usage and exits — it never reads
 // stdin. An unrecognised first arg is a mistyped subcommand, not hook input,
 // so it errors rather than blocking on stdin.
 func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -65,7 +65,7 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		case "claude-hook":
 			return runClaudeHook(stdin, stdout)
 		case "--version", "-v":
-			fmt.Fprintln(stdout, "bash-gate "+version)
+			fmt.Fprintln(stdout, "shizo "+version)
 			return 0
 		case "help", "--help", "-h", "-?":
 			return runHelp(args[1:], stdout)
@@ -78,7 +78,7 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		case "selfcheck":
 			return runSelfcheck(args[1:], stdout, stderr)
 		default:
-			fmt.Fprintf(stderr, "bash-gate: unknown command %q\n\n%s\n", args[0], rootUsage)
+			fmt.Fprintf(stderr, "shizo: unknown command %q\n\n%s\n", args[0], rootUsage)
 			return 2
 		}
 	}
@@ -108,20 +108,20 @@ func runHelp(args []string, stdout io.Writer) int {
 	return 0
 }
 
-// claudeHookUsage documents the hook entrypoint invoked by gate.sh. This is
+// claudeHookUsage documents the hook entrypoint invoked by shizo.sh. This is
 // the only subcommand that reads stdin and logs decisions.
-const claudeHookUsage = `bash-gate claude-hook — the Claude Code PreToolUse hook entrypoint.
+const claudeHookUsage = `shizo claude-hook — the Claude Code PreToolUse hook entrypoint.
 
-usage: bash-gate claude-hook
+usage: shizo claude-hook
 
 Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
 evaluates the command against the rule tiers, and emits a decision object on
 stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
-(see $BASH_GATE_DIR/logs).`
+(see $SHIZO_DIR/logs).`
 
 // hookRootFn resolves the install root for hook mode via the password
 // database (getpwuid), not env vars. An agent that can set $HOME or
-// $BASH_GATE_DIR cannot redirect the hook to a forged rule store.
+// $SHIZO_DIR cannot redirect the hook to a forged rule store.
 // Var so tests can override.
 var hookRootFn = defaultHookRoot
 
@@ -130,7 +130,7 @@ func defaultHookRoot() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(u.HomeDir, ".bash-gate")
+	return filepath.Join(u.HomeDir, ".shizo")
 }
 
 func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
@@ -213,13 +213,10 @@ func currentEnviron() environ {
 // --- paths (§0) ---
 
 func installRoot() string {
-	if d := os.Getenv("BASH_GATE_DIR"); d != "" {
+	if d := os.Getenv("SHIZO_DIR"); d != "" {
 		return d
 	}
-	if d := os.Getenv("CLAUDE_BASH_RULES_DIR"); d != "" {
-		return d
-	}
-	return filepath.Join(os.Getenv("HOME"), ".bash-gate")
+	return filepath.Join(os.Getenv("HOME"), ".shizo")
 }
 
 func globalRulesPath() string { return filepath.Join(installRoot(), "global", "rules") }
@@ -228,11 +225,11 @@ func projectRulesPathFor(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	return filepath.Join(cwd, ".bash-gate")
+	return filepath.Join(cwd, ".shizo")
 }
 
 func logDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".bash-gate", "logs")
+	return filepath.Join(os.Getenv("HOME"), ".shizo", "logs")
 }
 
 // --- logging (§4.3) ---

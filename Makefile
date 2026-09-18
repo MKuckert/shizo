@@ -1,25 +1,25 @@
-# bash-gate — build and install.
+# shizo — build and install.
 # Override the install root for verification in a scratchpad:
 #   make install PREFIX=/tmp/bg-test
 
-PREFIX ?= $(HOME)/.bash-gate
+PREFIX ?= $(HOME)/.shizo
 
 ENGINE := $(PREFIX)/engine
 GLOBAL := $(PREFIX)/global
 
 SRC := src
 DIST := dist
-BIN := $(DIST)/bash-gate
+BIN := $(DIST)/shizo
 
-BINARY_NAME := bash-gate
+BINARY_NAME := shizo
 VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-# Stamp VERSION into the binary (main.version), readable via `bash-gate --version`.
+# Stamp VERSION into the binary (main.version), readable via `shizo --version`.
 # -s -w drop debug symbols (smaller file, harder to debug). Combined with
 # -trimpath (in the release recipe) for reproducible, path-clean binaries.
 LDFLAGS     := -s -w -X main.version=$(VERSION)
 
 # Platforms to cross-compile for. windows-amd64 is included to match the
-# reference template, but note bash-gate is Unix-only in practice (gate.sh
+# reference template, but note shizo is Unix-only in practice (shizo.sh
 # is bash and it relies on the nono sandbox) — drop it if you don't need it.
 PLATFORMS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
 
@@ -51,22 +51,25 @@ test:
 # ONLY if none exist yet — never clobbers an operator's tuned rules.
 install: build
 	mkdir -p "$(ENGINE)" "$(GLOBAL)" "$(PREFIX)/logs" "$(PREFIX)/attestations"
-	cp "$(BIN)" "$(ENGINE)/bash-gate"
-	cp "$(SRC)/gate.sh" "$(ENGINE)/gate.sh"
-	chmod 0755 "$(ENGINE)/bash-gate" "$(ENGINE)/gate.sh"
+	cp "$(BIN)" "$(ENGINE)/shizo"
+	cp "$(SRC)/shizo.sh" "$(ENGINE)/shizo.sh"
+	chmod 0755 "$(ENGINE)/shizo" "$(ENGINE)/shizo.sh"
 	if [ ! -f "$(GLOBAL)/rules" ]; then \
 		cp conf/global-rules.starter "$(GLOBAL)/rules"; \
 		echo "installed starter rules -> $(GLOBAL)/rules"; \
-		BASH_GATE_DIR="$(PREFIX)" "$(ENGINE)/bash-gate" attest --global; \
+		SHIZO_DIR="$(PREFIX)" "$(ENGINE)/shizo" attest --global; \
 	else \
 		echo "kept existing rules  -> $(GLOBAL)/rules"; \
-		echo "(re-attest with: bash-gate attest --global, if you edited them)"; \
+		echo "(re-attest with: shizo attest --global, if you edited them)"; \
+	fi
+	@if [ -d "$(HOME)/.bash-gate" ]; then \
+		echo "NOTE: old install dir ~/.bash-gate found — rename it to ~/.shizo"; \
 	fi
 	@if [ -d "$(HOME)/.claude-bash-rules" ]; then \
-		echo "NOTE: old install dir ~/.claude-bash-rules found — rename it to ~/.bash-gate"; \
+		echo "NOTE: old install dir ~/.claude-bash-rules found — rename it to ~/.shizo"; \
 	fi
 	@echo "engine installed     -> $(ENGINE)"
-	@echo "register the hook (command: $(ENGINE)/gate.sh) in ~/.claude/settings.json"
+	@echo "register the hook (command: $(ENGINE)/shizo.sh) in ~/.claude/settings.json"
 
 site:
 	cd "$(SSG_SRC)" && go run . -root ../.. build

@@ -93,13 +93,13 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 	}
 	gRecord, err := readAttestRecord(globalAttestPath(root))
 	if err != nil {
-		return "global rules not attested (" + err.Error() + "); run `bash-gate attest --global`"
+		return "global rules not attested (" + err.Error() + "); run `shizo attest --global`"
 	}
 	if reason := checkRecord("global", gNorm, gRecord); reason != "" {
 		return reason
 	}
 	if live := normalizedPath(os.Getenv("PATH"), gNorm.trusted); gRecord["normalized-path"] != live {
-		return "PATH (trust-dir subset) changed since global attestation; re-attest with `bash-gate attest --global`"
+		return "PATH (trust-dir subset) changed since global attestation; re-attest with `shizo attest --global`"
 	}
 
 	if !projectPresent {
@@ -115,7 +115,7 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 	}
 	pRecord, err := readAttestRecord(projectAttestPath(root, abs))
 	if err != nil {
-		return "project rules not attested (" + err.Error() + "); run `bash-gate attest`"
+		return "project rules not attested (" + err.Error() + "); run `shizo attest`"
 	}
 	return checkRecord("project", pNorm, pRecord)
 }

@@ -1,7 +1,7 @@
 {
-  "name": "bash-gate",
-  "displayName": "bash-gate rules",
-  "description": "Syntax highlighting for bash-gate rule files",
+  "name": "shizo",
+  "displayName": "shizo rules",
+  "description": "Syntax highlighting for shizo rule files",
   "author": {
     "name": "Martin Kuckert"
   },
@@ -16,25 +16,25 @@
   "contributes": {
     "languages": [
       {
-        "id": "bash-gate",
+        "id": "shizo",
         "aliases": [
-          "bash-gate rules"
+          "shizo rules"
         ],
         "filenames": [
-          ".bash-gate",
+          ".shizo",
           "global-rules.starter"
         ],
         "filenamePatterns": [
-          "**/.bash-gate/global/rules"
+          "**/.shizo/global/rules"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "bash-gate",
-        "scopeName": "source.bash-gate",
-        "path": "./bash-gate.tmLanguage.json"
+        "language": "shizo",
+        "scopeName": "source.shizo",
+        "path": "./shizo.tmLanguage.json"
       }
     ]
   }

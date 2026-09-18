@@ -2,7 +2,7 @@
 
 ## What this is
 
-`bash-gate` is a Claude Code `PreToolUse` hook (matcher `Bash`) that allowlists
+`shizo` is a Claude Code `PreToolUse` hook (matcher `Bash`) that allowlists
 Bash commands at **subcommand granularity**. It parses each command with
 `mvdan.cc/sh/v3/syntax`, splits pipes and `&&`/`||`/`;` chains, resolves every
 command against the inherited `PATH` plus a configured trusted-dir set, and
@@ -22,28 +22,28 @@ under `plans/`.
 
 ```sh
 make test         # cd src && go test ./...  — run before every commit
-make build        # -> dist/bash-gate
-make install      # installs to $HOME/.bash-gate (never clobbers rules)
+make build        # -> dist/shizo
+make install      # installs to $HOME/.shizo (never clobbers rules)
 make install PREFIX=/tmp/x   # install elsewhere for verification
 ```
 
-`bash-gate help` prints a subcommand overview; `help <cmd>` (or `<cmd> --help`)
+`shizo help` prints a subcommand overview; `help <cmd>` (or `<cmd> --help`)
 prints that command's usage.
 
 Lint rule files before installing them:
 
 ```sh
-dist/bash-gate validate                 # resolved global + project (cwd) tiers
-dist/bash-gate validate FILE...         # explicit files, validated as a global tier
-dist/bash-gate validate --project FILE  # validate FILE as a project tier
+dist/shizo validate                 # resolved global + project (cwd) tiers
+dist/shizo validate FILE...         # explicit files, validated as a global tier
+dist/shizo validate --project FILE  # validate FILE as a project tier
 ```
 
 Dry-run a command through the pipeline (operator-only; never logs or emits hook JSON):
 
 ```sh
-dist/bash-gate test --assume-sandboxed 'git status'   # command from args or stdin
-dist/bash-gate test --cwd DIR --json 'git push'       # pick a project tier; log-line shape
-dist/bash-gate test --stdin-json < hook.json          # replay a full hook JSON
+dist/shizo test --assume-sandboxed 'git status'   # command from args or stdin
+dist/shizo test --cwd DIR --json 'git push'       # pick a project tier; log-line shape
+dist/shizo test --stdin-json < hook.json          # replay a full hook JSON
 ```
 
 `validate` is operator-only — it never touches the hook pipeline. It reports every
@@ -57,7 +57,7 @@ directives). Exit 0 = no errors (warnings allowed), 1 = errors, 2 = usage.
 
 ## Layout
 
-Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
+Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 
 | File            | Responsibility                                             |
 | --------------- | ---------------------------------------------------------- |
@@ -67,10 +67,10 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 | `match.go`      | `matchRule()` — pure argv-vs-rule token matching (`ANY`/`HAS`) |
 | `extract.go`    | argv extraction from the parsed AST; `<subst>`/`<var>` tokens |
 | `resolve.go`    | command resolution: safe builtins, uncond-deny, PATH lookup |
-| `validate.go`   | `bash-gate validate` — operator-only rule linter (all errors + semantic warnings) |
+| `validate.go`   | `shizo validate` — operator-only rule linter (all errors + semantic warnings) |
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
-| `attest.go`     | `bash-gate attest` — operator-only; writes/reads `.attest` records |
-| `gate.sh`       | wrapper installed as the hook `command`; fails closed      |
+| `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
+| `shizo.sh`       | wrapper installed as the hook `command`; fails closed      |
 | `conf/`         | starter global rules, example Claude settings, editor grammar |
 
 ## Rules DSL (see `docs/RULES.md`)
@@ -98,7 +98,7 @@ Everything ships from `src/` (Go) + `src/gate.sh` (bash wrapper).
 - Match the existing terse comment style; comments cite the relevant `docs/` section.
 - Keep matching/extraction functions **pure** (no I/O) — that is what makes them
   testable. I/O lives in `main.go`, `rules.go`, `resolve.go`.
-- Never log or echo secrets. `GATE_DEBUG` mirrors raw hook JSON (attacker-
+- Never log or echo secrets. `SHIZO_DEBUG` mirrors raw hook JSON (attacker-
   controlled command text, argv secrets) to `logs/stdin.log` — keep it unset by
   default and never commit that file.
 - `dist/` is gitignored; don't commit build artifacts.

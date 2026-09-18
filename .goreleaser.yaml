@@ -1,10 +1,10 @@
 version: 2
 
-project_name: bash-gate
+project_name: shizo
 
 builds:
   - dir: src
-    binary: bash-gate
+    binary: shizo
     ldflags:
       - -s -w -X main.version={{.Version}}
     flags:
@@ -28,7 +28,7 @@ archives:
         formats:
           - zip
     files:
-      - src: src/gate.sh
+      - src: src/shizo.sh
         dst: .
       - src: conf/**/*
         dst: conf

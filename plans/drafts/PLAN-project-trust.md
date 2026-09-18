@@ -9,7 +9,7 @@ trust list. Operators want per-repo trust.
 ## Why this isn't already allowed
 
 `trust` is global-only **by design**: it widens policy, and the project tier is
-attacker-editable (prompt injection can write `<cwd>/.bash-gate`). A
+attacker-editable (prompt injection can write `<cwd>/.shizo`). A
 naïve project `trust` would be a full bypass:
 
 ```
@@ -20,11 +20,11 @@ allow eviltool ANY          # project allow already widens ask→allow
 Two controls already stand between that file and execution, and the design must
 keep both:
 
-- **Attestation.** `bash-gate attest` (`attest.go`/`attest_verify.go`, enforced
+- **Attestation.** `shizo attest` (`attest.go`/`attest_verify.go`, enforced
   in `loadConfig` via `verifyAttestation`) is mandatory: a tier that is
   unattested or changed since attest yields deny-all. So the project tier is not
   *freely* attacker-editable in effect — an attacker who writes or edits
-  `<cwd>/.bash-gate` breaks its hash and gets deny-all, not a bypass. The
+  `<cwd>/.shizo` breaks its hash and gets deny-all, not a bypass. The
   operator must review and re-attest out-of-band before rules take effect.
 - **The rest of the pipeline.** A trusted dir alone allows nothing: the command
   still needs an allow rule, still loses to any deny, still hits `uncondDeny`.

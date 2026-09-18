@@ -18,17 +18,17 @@ import (
 // bits, and is non-destructive (no writes to global/rules; probe files are
 // created and removed).
 
-const selfcheckUsage = `bash-gate selfcheck — verify the sandbox enforces the read/write shape
-bash-gate's fail-closed model depends on. Must be run inside the sandbox:
+const selfcheckUsage = `shizo selfcheck — verify the sandbox enforces the read/write shape
+shizo's fail-closed model depends on. Must be run inside the sandbox:
 nono enforces at the syscall layer, so file mode bits don't reflect what's
 actually allowed — each check attempts the real operation.
 
-usage: bash-gate selfcheck [--root DIR] [--json]
+usage: shizo selfcheck [--root DIR] [--json]
 
 Flags:
-  --root DIR  install root to check (default: $BASH_GATE_DIR or
-              ~/.bash-gate); logs/ is always checked at its real,
-              fixed location ($HOME/.bash-gate/logs, per gate.sh)
+  --root DIR  install root to check (default: $SHIZO_DIR or
+              ~/.shizo); logs/ is always checked at its real,
+              fixed location ($HOME/.shizo/logs, per shizo.sh)
   --json      emit machine-readable JSON instead of a table
 
 Exit 0 if every check passes, 1 if any fails, 2 on a usage problem.`

@@ -1,8 +1,8 @@
-# `bash-gate lsp` — diagnostics-only language server
+# `shizo lsp` — diagnostics-only language server
 
 ## Problem
 
-Editing rule files requires a write-then-`bash-gate validate` loop. Seven
+Editing rule files requires a write-then-`shizo validate` loop. Seven
 major editors support LSP; a diagnostics-only server gives live feedback in
 all of them with zero per-editor glue.
 
@@ -55,21 +55,21 @@ finding.line                → LSP line (0-indexed, so line-1)
 
 The server needs to know whether a file is global or project tier (affects
 which directives are valid). Heuristic: if the file path ends in
-`.bash-gate`, it's a project tier; if it matches `global/rules`, it's
+`.shizo`, it's a project tier; if it matches `global/rules`, it's
 global. Configurable via an initialization option if the heuristic proves
 insufficient.
 
 ## CLI
 
 ```
-bash-gate lsp          # starts stdio LSP server; no flags needed
-bash-gate lsp --help   # usage
+shizo lsp          # starts stdio LSP server; no flags needed
+shizo lsp --help   # usage
 ```
 
 Editors configure it as:
 
 ```json
-{ "command": "bash-gate", "args": ["lsp"] }
+{ "command": "shizo", "args": ["lsp"] }
 ```
 
 ## Changes

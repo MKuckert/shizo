@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// attestGlobal points BASH_GATE_DIR at root and writes a passing
+// attestGlobal points SHIZO_DIR at root and writes a passing
 // attestation record for global tier content, so loadConfig's attestation
 // check succeeds for fixtures/tests that aren't exercising attestation itself.
 func attestGlobal(t *testing.T, root, content string) {
 	t.Helper()
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	t.Setenv("NONO_CAP_FILE", "") // probe is sandbox-only; most tests aren't
 	norm, reason, ok := normalizeTier(content, false)
 	if !ok {
@@ -118,7 +118,7 @@ func TestAttestRecordRoundTrip(t *testing.T) {
 	path := filepath.Join(dir, "x.attest")
 	fields := map[string]string{
 		"schema": attestSchema, "tier": "global", "norm-version": normVersion,
-		"rules-path": "/repo/.bash-gate", "rules-hash": "sha256:deadbeef",
+		"rules-path": "/repo/.shizo", "rules-hash": "sha256:deadbeef",
 		"attested-at": "2026-09-09T12:34:56Z", "attested-by": "me@host",
 		"normalized-path": "/usr/bin:/bin",
 	}
@@ -144,7 +144,7 @@ func TestAttestRecordRoundTrip(t *testing.T) {
 
 func TestLoadConfigDeniesWithoutAttestation(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", dir) // no attestations/ written
+	t.Setenv("SHIZO_DIR", dir) // no attestations/ written
 	body := "sandbox nono\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
 	cfg := loadConfig(g, "", installRoot())
@@ -189,7 +189,7 @@ func TestLoadConfigDeniesOnMissingProjectAttestation(t *testing.T) {
 	g := writeFile(t, dir, "rules", body)
 	attestGlobal(t, dir, body)
 	projDir := t.TempDir()
-	proj := writeFile(t, projDir, ".bash-gate", "deny git push ANY\n") // tightening-only, unattested
+	proj := writeFile(t, projDir, ".shizo", "deny git push ANY\n") // tightening-only, unattested
 	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
 		t.Fatal("an unattested project tier must deny all, even though it only tightens")
 	}
@@ -202,9 +202,9 @@ func TestLoadConfigDeniesOnProjectHashMismatch(t *testing.T) {
 	attestGlobal(t, dir, body)
 	projDir := t.TempDir()
 	projBody := "deny git push ANY\n"
-	proj := writeFile(t, projDir, ".bash-gate", projBody)
+	proj := writeFile(t, projDir, ".shizo", projBody)
 	attestProject(t, dir, proj, projBody)
-	writeFile(t, projDir, ".bash-gate", projBody+"allow rm ANY\n") // tamper after attesting
+	writeFile(t, projDir, ".shizo", projBody+"allow rm ANY\n") // tamper after attesting
 	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
 		t.Fatal("project rules changed since attestation must deny all")
 	}
@@ -215,7 +215,7 @@ func TestLoadConfigNoProjectFileSkipsProjectCheck(t *testing.T) {
 	body := "sandbox nono\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
 	attestGlobal(t, dir, body)
-	if cfg := loadConfig(g, filepath.Join(t.TempDir(), ".bash-gate"), installRoot()); cfg.denyAll {
+	if cfg := loadConfig(g, filepath.Join(t.TempDir(), ".shizo"), installRoot()); cfg.denyAll {
 		t.Fatalf("an absent project tier needs no attestation: %s", cfg.denyReason)
 	}
 }
@@ -242,7 +242,7 @@ func TestLoadConfigDeniesOnPathDrift(t *testing.T) {
 func TestRunAttestGlobalThenLoadConfigTrusts(t *testing.T) {
 	root := t.TempDir()
 	bin := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	t.Setenv("NONO_CAP_FILE", "")
 	t.Setenv("PATH", bin)
 	body := "sandbox nono\ntrust " + bin + "\nallow git status ANY\n"
@@ -260,13 +260,13 @@ func TestRunAttestGlobalThenLoadConfigTrusts(t *testing.T) {
 
 func TestRunAttestProjectThenLoadConfigTrusts(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	body := "sandbox nono\nallow git status ANY\n"
 	g := writeFile(t, root, "global/rules", body)
 	attestGlobal(t, root, body)
 
 	projDir := t.TempDir()
-	proj := writeFile(t, projDir, ".bash-gate", "deny git push ANY\n")
+	proj := writeFile(t, projDir, ".shizo", "deny git push ANY\n")
 
 	var out, errb bytes.Buffer
 	rc := runAttest([]string{proj}, &out, &errb)
@@ -280,7 +280,7 @@ func TestRunAttestProjectThenLoadConfigTrusts(t *testing.T) {
 
 func TestDangerouslyNoneSkipsAttestation(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", dir)
+	t.Setenv("SHIZO_DIR", dir)
 	t.Setenv("NONO_CAP_FILE", "")
 	body := "sandbox dangerously-none\nallow git status ANY\n"
 	g := writeFile(t, dir, "rules", body)
@@ -307,7 +307,7 @@ func TestRunAttestInsideSandboxRefuses(t *testing.T) {
 
 func TestRunAttestRejectsMalformedRules(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", root)
+	t.Setenv("SHIZO_DIR", root)
 	writeFile(t, root, "global/rules", "wat is this\n")
 	var out, errb bytes.Buffer
 	if rc := runAttest([]string{"--global"}, &out, &errb); rc != 1 {

@@ -15,7 +15,7 @@ import (
 // first bad line), it reports *every* syntax error plus semantic warnings, so
 // rules can be checked before install.
 
-const validateUsage = `usage: bash-gate validate [--project] [FILE...]
+const validateUsage = `usage: shizo validate [--project] [FILE...]
 
 With no FILE, validates the resolved global tier and the project tier in the
 current directory. FILE arguments are validated as a global tier unless
@@ -44,7 +44,7 @@ type finding struct {
 	msg   string
 }
 
-// runValidate implements `bash-gate validate`. It never reads stdin or emits
+// runValidate implements `shizo validate`. It never reads stdin or emits
 // hook JSON; it prints human-readable diagnostics and returns a process code.
 func runValidate(args []string, stdout, stderr io.Writer) int {
 	project := false

@@ -21,7 +21,7 @@ import (
 // env.sandboxed=true so the rest of the pipeline is exercised faithfully; when a
 // deny is sandbox-gate-only, we hint at that flag.
 
-const testUsage = `usage: bash-gate test [flags] [COMMAND]
+const testUsage = `usage: shizo test [flags] [COMMAND]
 
 Dry-run COMMAND through the gate pipeline and print the decision. COMMAND may be
 given as arguments, or read from stdin when omitted. Exit codes mirror the hook:

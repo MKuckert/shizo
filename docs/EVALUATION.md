@@ -55,7 +55,7 @@ the actual policy result.
 ## Logging
 
 Hook mode appends one object per invocation to
-`$HOME/.bash-gate/logs/YYYY-MM-DD.jsonl`:
+`$HOME/.shizo/logs/YYYY-MM-DD.jsonl`:
 
 ```json
 {

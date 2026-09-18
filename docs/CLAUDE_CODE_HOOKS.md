@@ -1,7 +1,7 @@
 # Claude Code hook protocol
 
-`bash-gate` implements Claude Code's `PreToolUse` contract for the `Bash`
-matcher. Register the installed `gate.sh` wrapper rather than invoking the
+`shizo` implements Claude Code's `PreToolUse` contract for the `Bash`
+matcher. Register the installed `shizo.sh` wrapper rather than invoking the
 binary directly; the README contains the settings example.
 
 ## Input
@@ -44,14 +44,14 @@ unmatched `ask` defers to Claude Code's classifier:
 | allow | allow object | allow object |
 | unmatched | ask object | no decision |
 
-The binary represents a deliberate defer as the literal `defer`; `gate.sh`
+The binary represents a deliberate defer as the literal `defer`; `shizo.sh`
 converts it to empty stdout. This distinguishes defer from a crash inside the
 wrapper.
 
 ## Exit status
 
 Claude Code blocks `PreToolUse` only on exit 2. Other failures, empty output,
-and invalid output can fail open, so `bash-gate` uses this contract:
+and invalid output can fail open, so `shizo` uses this contract:
 
 | Result | stdout | Exit |
 | --- | --- | --- |
@@ -63,16 +63,16 @@ Exit 2 remains blocking even if Claude Code cannot parse the JSON body.
 
 ## Wrapper
 
-`gate.sh` reads stdin once, checks that `$HOME/.bash-gate/logs` is writable,
-runs `bash-gate claude-hook`, and accepts only these combinations:
+`shizo.sh` reads stdin once, checks that `$HOME/.shizo/logs` is writable,
+runs `shizo claude-hook`, and accepts only these combinations:
 
 - exit 0 plus decision JSON: forward the JSON
 - exit 0 plus `defer`: emit nothing
 - exit 2 plus deny JSON: forward it and exit 2
 - anything else: emit a synthetic deny and exit 2
 
-Stderr goes to `logs/gate.log` for diagnosis. If logging is unavailable, the
-wrapper emits an actionable deny without running the policy. `GATE_DEBUG`
+Stderr goes to `logs/shizo.log` for diagnosis. If logging is unavailable, the
+wrapper emits an actionable deny without running the policy. `SHIZO_DEBUG`
 additionally copies raw input to `logs/stdin.log`; it must remain disabled in
 normal use because command arguments may contain secrets.
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "bash-gate rules",
-  "scopeName": "source.bash-gate",
+  "name": "shizo rules",
+  "scopeName": "source.shizo",
   "patterns": [
     { "include": "#comment" },
     { "include": "#directive" },
@@ -13,31 +13,31 @@
   "repository": {
     "comment": {
       "match": "^\\s*#.*$",
-      "name": "comment.line.number-sign.bash-gate"
+      "name": "comment.line.number-sign.shizo"
     },
     "directive": {
       "match": "^\\s*(returntype|sandbox|trust)\\b",
       "captures": {
-        "1": { "name": "keyword.other.directive.bash-gate" }
+        "1": { "name": "keyword.other.directive.shizo" }
       }
     },
     "action": {
       "match": "^\\s*(allow|deny)\\b",
       "captures": {
-        "1": { "name": "keyword.control.bash-gate" }
+        "1": { "name": "keyword.control.shizo" }
       }
     },
     "wildcard": {
       "match": "\\b(ANY|HAS)\\b",
-      "name": "constant.language.bash-gate"
+      "name": "constant.language.shizo"
     },
     "string-single": {
       "match": "'[^']*'",
-      "name": "string.quoted.single.bash-gate"
+      "name": "string.quoted.single.shizo"
     },
     "string-double": {
       "match": "\"[^\"]*\"",
-      "name": "string.quoted.double.bash-gate"
+      "name": "string.quoted.double.shizo"
     }
   }
 }

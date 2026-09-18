@@ -1,6 +1,6 @@
 # Architecture
 
-`bash-gate` is a static policy layer around Claude Code's Bash tool. The
+`shizo` is a static policy layer around Claude Code's Bash tool. The
 [evaluation pipeline](EVALUATION.md), [rules reference](RULES.md), and
 [hook protocol](CLAUDE_CODE_HOOKS.md) define behavior; this document explains
 the constraints behind it.
@@ -11,7 +11,7 @@ The design depends on two deployment properties:
 
 - The agent runs inside an OS sandbox, normally `nono`. The sandbox protects the
   engine, global rules, and attestations from writes while limiting filesystem
-  and network reach. `bash-gate` supplements that boundary; it does not replace
+  and network reach. `shizo` supplements that boundary; it does not replace
   it. `sandbox nono` checks `NONO_CAP_FILE` to prevent accidental unconfined use.
 - Known-safe commands should run without prompts, known-dangerous commands
   should stop, and unfamiliar but statically valid commands should retain a
@@ -38,14 +38,14 @@ revisited if either behavior changes.
 | Policy tiers           | Required global tier plus optional cwd project tier                                | Repositories can add policy, but a global deny remains absolute                    |
 | Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only                               | A project cannot alter the execution boundary or output mode                       |
 | Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
-| Installation           | Engine, rules, and attestations below `$HOME/.bash-gate`, read-only in the sandbox | Writable Claude configuration cannot replace the gate                              |
+| Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | Writable Claude configuration cannot replace the gate                              |
 | Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
 | Automode               | Defer only unmatched results                                                       | Explicit allow and deny policy remains authoritative                               |
 | Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
 
 Self-protection belongs to the sandbox profile, not to Bash policy.
 [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) documents
-the intended grants, and `bash-gate selfcheck` probes their effective syscall
+the intended grants, and `shizo selfcheck` probes their effective syscall
 behavior from inside the sandbox.
 
 ## Parser choice
@@ -67,7 +67,7 @@ extended, or replaced through its parent. Unknown record schema versions fail
 closed.
 
 In hook mode, the installation root comes from the password database rather
-than `$HOME` or `$BASH_GATE_DIR`, preventing an agent-controlled environment
+than `$HOME` or `$SHIZO_DIR`, preventing an agent-controlled environment
 from selecting forged rules. Operator commands continue to honor those
 variables. `dangerously-none` skips attestation because an unconfined process
 that can edit both policy and records makes verification meaningless.
@@ -90,7 +90,7 @@ that can edit both policy and records makes verification meaningless.
   `FOO=1 make` and `git commit -m "$MSG"`.
 - Claude Code hook timeouts fail open because the wrapper cannot handle them.
 - Decision logs are writable in the sandbox and are not evidence-grade.
-- `GATE_DEBUG` records raw, attacker-controlled input and may expose argv
+- `SHIZO_DEBUG` records raw, attacker-controlled input and may expose argv
   secrets.
 
 ## Environment-specific policy
@@ -103,7 +103,7 @@ trusted subset of `PATH` in order so such resolution changes fail closed.
 
 ## Validation
 
-`bash-gate validate` is an operator-only linter, separate from hook evaluation.
+`shizo validate` is an operator-only linter, separate from hook evaluation.
 It reuses the runtime line parser but continues after errors to report all of
 them. Its semantic warnings are deliberately conservative: duplicates, ignored
 project directives, absent trust directories, rules for unconditional-deny or

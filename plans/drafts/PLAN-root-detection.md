@@ -18,7 +18,7 @@ No stderr warnings for `dangerously-none` + root (user accepted all risk).
 3. **`validate.go` — root + nono = error**: `validate` has its own rule-loading
    path (`loadAndValidate`). After parsing the sandbox directive, if
    `sandbox nono` + `euid == 0`, emit an error line and set exit 1. This makes
-   `bash-gate validate` fail when the operator is root with nono rules.
+   `shizo validate` fail when the operator is root with nono rules.
 
 4. **Tests — `main_test.go`**: the existing `setupRun` fix (use
    `dangerously-none` when root, skip `NONO_CAP_FILE`) is already correct for
@@ -49,5 +49,5 @@ No stderr warnings for `dangerously-none` + root (user accepted all risk).
   like `rootBlocksNono(euid int, mode string) string` that returns "" or a deny
   reason.
 
-Skipped: `bash-gate test --assume-sandboxed` root warning — add when operators
+Skipped: `shizo test --assume-sandboxed` root warning — add when operators
 report confusion running `test` as root with nono rules.

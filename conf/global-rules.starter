@@ -1,6 +1,6 @@
-# bash-gate v0.1 global rules — starter for a fresh installation.
+# shizo v0.1 global rules — starter for a fresh installation.
 #
-# Installed to $HOME/.bash-gate/global/rules (only if absent).
+# Installed to $HOME/.shizo/global/rules (only if absent).
 # Directives (returntype, trust, sandbox) must come before any allow/deny rules.
 # Any deny wins over any allow; an unmatched command yields `ask`.
 

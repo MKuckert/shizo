@@ -14,19 +14,19 @@ import (
 // current content so loadConfig (src/rules.go) can recognise tampering later —
 // see plans/drafts/PLAN-rule-attestation.md and docs/RULES.md.
 
-const attestUsage = `bash-gate attest — record operator approval of a rule tier.
+const attestUsage = `shizo attest — record operator approval of a rule tier.
 
-usage: bash-gate attest --global
-       bash-gate attest [FILE]
+usage: shizo attest --global
+       shizo attest [FILE]
 
---global attests the resolved global tier ($BASH_GATE_DIR/global/rules),
+--global attests the resolved global tier ($SHIZO_DIR/global/rules),
 snapshotting the live PATH intersected with the trust-dir set alongside the
 rules hash. With no --global, attests the project tier at FILE (default:
-<cwd>/.bash-gate).
+<cwd>/.shizo).
 
 Run this outside the sandbox, after reviewing the rules. The hook recomputes
 the hash on every command and denies everything on any divergence. Writes to
-$BASH_GATE_DIR/attestations/. Never touches the hook pipeline.`
+$SHIZO_DIR/attestations/. Never touches the hook pipeline.`
 
 func runAttest(args []string, stdout, stderr io.Writer) int {
 	global := false
@@ -53,7 +53,7 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	// attest writes to $BASH_GATE_DIR/attestations/, outside the sandbox's
+	// attest writes to $SHIZO_DIR/attestations/, outside the sandbox's
 	// writable set — the raw os error is opaque, so bail early with a hint.
 	if os.Getenv("NONO_CAP_FILE") != "" {
 		fmt.Fprintln(stderr, "attest: this command must be run outside the sandbox")

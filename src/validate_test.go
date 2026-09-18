@@ -62,7 +62,7 @@ func TestValidateRequiresSandbox(t *testing.T) {
 		t.Error("missing sandbox should deny all")
 	}
 	// Project tier does not require it (directives are global-only there).
-	fs = validateFile(".bash-gate", body, true)
+	fs = validateFile(".shizo", body, true)
 	if hasMsg(fs, "must declare a sandbox directive") {
 		t.Errorf("project tier must not require sandbox: %+v", fs)
 	}
@@ -114,7 +114,7 @@ func TestValidateShadow(t *testing.T) {
 
 func TestValidateIgnoredDirectiveProjectTier(t *testing.T) {
 	body := "trust /opt/x\nreturntype automode\ndeny rm ANY\n"
-	fs := validateFile(".bash-gate", body, true)
+	fs := validateFile(".shizo", body, true)
 	if !hasMsg(fs, "directive ignored in project tier") {
 		t.Errorf("expected ignored-directive warnings: %+v", fs)
 	}
@@ -204,7 +204,7 @@ func TestRunValidateUnknownFlag(t *testing.T) {
 
 func TestRunValidateInstalledMissingGlobal(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("BASH_GATE_DIR", root) // no global/rules under it
+	t.Setenv("SHIZO_DIR", root) // no global/rules under it
 	var out, errOut bytes.Buffer
 	rc := runValidate(nil, &out, &errOut)
 	if rc != 1 {

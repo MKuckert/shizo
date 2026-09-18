@@ -149,7 +149,7 @@ func TestConfigLoadErrors(t *testing.T) {
 }
 
 // setupSelfcheck builds a temp install root with a clean global/rules,
-// engine/ and logs/ dirs, and points HOME + BASH_GATE_DIR at it.
+// engine/ and logs/ dirs, and points HOME + SHIZO_DIR at it.
 func setupSelfcheck(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -160,9 +160,9 @@ func setupSelfcheck(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "attestations"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("BASH_GATE_DIR", root)
-	t.Setenv("HOME", root) // logDir() is always $HOME/.bash-gate/logs
-	if err := os.MkdirAll(filepath.Join(root, ".bash-gate", "logs"), 0o755); err != nil {
+	t.Setenv("SHIZO_DIR", root)
+	t.Setenv("HOME", root) // logDir() is always $HOME/.shizo/logs
+	if err := os.MkdirAll(filepath.Join(root, ".shizo", "logs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -220,7 +220,7 @@ func TestRunSelfcheckJSON(t *testing.T) {
 func TestRunSelfcheckHelp(t *testing.T) {
 	var out, errb bytes.Buffer
 	rc := runSelfcheck([]string{"--help"}, &out, &errb)
-	if rc != 0 || !strings.Contains(out.String(), "usage: bash-gate selfcheck") {
+	if rc != 0 || !strings.Contains(out.String(), "usage: shizo selfcheck") {
 		t.Errorf("help: rc=%d out=%q", rc, out.String())
 	}
 }

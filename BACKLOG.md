@@ -1,14 +1,13 @@
 - Perform default deny list crosscheck (https://github.com/karanb192/claude-code-hooks/blob/main/plugins/block-dangerous-commands/block-dangerous-commands.js)
-- [Rename `bash-gate` to `shizo` (Shell Isolation / Schizoid)](plans/drafts/PLAN-rename-to-shizo.md)
 - [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
 - Find alpha tester?
 - [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)
 - [A proper language server](plans/drafts/PLAN-language-server.md)
-- Install docs with `make install` and `bash-gate docs` (or similar) to view them locally
+- Install docs with `make install` and `shizo docs` (or similar) to view them locally
 - Expand to other harnesses (see [pretooluse-hook-equivalents research](docs/research/pretooluse-hook-equivalents.md))
-- Add `bash-gate install claude-hook`
-- Rename `bash-gate claude-hook` to `bash-gate hook pretooluse` to make it harness agnostic
-- Add `bash-gate info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
-- Add setting to deny stdin redirection at the AST level. bash-gate already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
+- Add `shizo install claude-hook`
+- Rename `shizo claude-hook` to `shizo hook pretooluse` to make it harness agnostic
+- Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
+- Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
 - Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar. This is a known attack vector for shell injection.
 - Add a `ask` rule to enforce something like `rm -rf` to always asked the operator, even if the base command is allowed.

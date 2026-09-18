@@ -1,7 +1,7 @@
 # Can nono make the project rules file read-only in a writable workdir?
 
 Research for `plans/drafts/PLAN-readonly-project-rules.md`. Question: can a nono
-profile keep the agent workdir writable while making `<cwd>/.bash-gate`
+profile keep the agent workdir writable while making `<cwd>/.shizo`
 **readable but not writable** from inside the sandbox, so in-session tampering
 that widens policy is blocked?
 
@@ -37,7 +37,7 @@ Workdir granted writable via `filesystem.allow: ["$WORKDIR"]` unless noted.
 | ro1 | `allow $WORKDIR` + `read_file` + `deny` rules | ❌ blocked | ❌ blocked | writable |
 | ro2 | `allow $WORKDIR` + `read_file` rules | ✅ OK | ❌ **still writable** | writable |
 | ro3 | `read $WORKDIR` + `allow_file normal.txt` | ✅ OK | ✅ blocked | **not writable** (CREATE blocked) |
-| ro4 | `allow $WORKDIR` + `deny **/.bash-gate` | ❌ blocked | ❌ blocked | writable |
+| ro4 | `allow $WORKDIR` + `deny **/.shizo` | ❌ blocked | ❌ blocked | writable |
 
 Key readings:
 
@@ -54,7 +54,7 @@ Key readings:
 
 ### Glob + post-start recreate (ro4, macOS)
 
-`deny: ["**/.bash-gate"]` matched correctly (patterns without an absolute
+`deny: ["**/.shizo"]` matched correctly (patterns without an absolute
 prefix are rooted at the workdir) and, on macOS, the deny is backed by a runtime
 regex: I confirmed **delete-then-recreate after sandbox start is still blocked**
 (`DELETE`, `RECREATE`, `READ-after` all blocked). An attacker inside the sandbox
@@ -62,8 +62,8 @@ cannot escape the deny by removing and rewriting the file.
 
 ## Why full `deny` is self-defeating for this feature
 
-bash-gate runs **inside** the sandbox (it's a Claude Code `PreToolUse` hook, a
-child of the sandboxed session). If `.bash-gate` is `deny`'d, bash-gate
+shizo runs **inside** the sandbox (it's a Claude Code `PreToolUse` hook, a
+child of the sandboxed session). If `.shizo` is `deny`'d, shizo
 can't read it either, so the **project tier is simply never loaded** in-sandbox.
 
 That is fail-safe — an unreadable project tier can't widen `ask`→`allow`, and a
@@ -87,7 +87,7 @@ weaker on Linux.
 
 - **Option A ("read-only, workdir stays writable")** — **not expressible on
   nono.** The mechanism it depends on (write-only deny) does not exist.
-- **Option A′ (full `deny` of `**/.bash-gate`)** — enforceable and
+- **Option A′ (full `deny` of `**/.shizo`)** — enforceable and
   recreate-proof on macOS, but the project tier is *unreadable* in-sandbox, so
   the selfcheck would have to assert "not readable," not "readable and not
   writable." Feature is effectively off in-sandbox.
@@ -102,14 +102,14 @@ weaker on Linux.
 Instead of enforcing read-only via the sandbox, **detect tampering** with a
 user-acknowledged hash:
 
-- The user runs `bash-gate attest <project-rules>` **outside** the sandbox. This
+- The user runs `shizo attest <project-rules>` **outside** the sandbox. This
   writes a hash (e.g. SHA-256) of the project rules file into the **global**
-  directory (`~/.bash-gate/...`), which the profile grants **read-only**
+  directory (`~/.shizo/...`), which the profile grants **read-only**
   inside the sandbox.
-- At evaluation time, bash-gate hashes the live project tier and compares against
+- At evaluation time, shizo hashes the live project tier and compares against
   the attested hash. On mismatch (or missing attestation), it **refuses to honor
   the project tier's widening `allow`s** (falls back to `ask`) — fail-closed.
-- In-session tampering that rewrites `.bash-gate` changes the hash but
+- In-session tampering that rewrites `.shizo` changes the hash but
   cannot update the attestation (global dir is read-only in-sandbox, and the
   `attest` step is an explicit human action outside the sandbox).
 

@@ -3,14 +3,14 @@
         <h1>Control what your AI agent can run.</h1>
         <p class="subtitle">Fail-closed Bash allowlisting for Claude Code.</p>
         <p class="hero-detail">
-            <code>bash-gate</code> is a <code>PreToolUse</code> hook that parses
+            <code>shizo</code> is a <code>PreToolUse</code> hook that parses
             shell syntax, resolves executables, and matches commands against a
             line-oriented rule set. Anything it cannot statically verify is
             denied.
         </p>
         <div class="cta-row">
             <a
-                href="https://gitlab.ssc-os.local/mkuckert/bash-gate"
+                href="https://gitlab.ssc-os.local/mkuckert/shizo"
                 class="btn btn-primary"
                 >View on GitLab</a
             >
@@ -76,7 +76,7 @@
     <div class="container">
         <h2>Why "ask the operator" isn't enough</h2>
         <p class="fatigue-intro">
-            Without bash-gate, unrecognized commands fall through to a
+            Without shizo, unrecognized commands fall through to a
             human approval prompt. In practice, operators approve what
             they can't fully read. Can you spot the problem here?
         </p>
@@ -114,7 +114,7 @@ PY</code></pre>
             Line 19 reads your SSH private key. The rest is a legitimate
             config edit — boring enough that most operators scroll past it.
             Real sessions contained heredocs of 80–130 lines.
-            bash-gate denies <code>python3</code> by default so this
+            shizo denies <code>python3</code> by default so this
             never reaches the operator.
         </p>
     </div>
@@ -141,7 +141,7 @@ PY</code></pre>
         <p class="rules-link">
             Full DSL reference:
             <a
-                href="https://gitlab.ssc-os.local/mkuckert/bash-gate/-/blob/main/docs/RULES.md"
+                href="https://gitlab.ssc-os.local/mkuckert/shizo/-/blob/main/docs/RULES.md"
                 >docs/RULES.md</a
             >
         </p>
@@ -151,8 +151,8 @@ PY</code></pre>
 <footer class="site-footer">
     <div class="container">
         <div class="footer-row">
-            <span>bash-gate</span>
-            <a href="https://gitlab.ssc-os.local/mkuckert/bash-gate">GitLab</a>
+            <span>shizo</span>
+            <a href="https://gitlab.ssc-os.local/mkuckert/shizo">GitLab</a>
             <span>MIT License</span>
             <span class="nono-credit"
                 >Designed for the

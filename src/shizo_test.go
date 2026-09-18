@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// runGate copies gate.sh into an engine dir, optionally installs a stub
-// bash-gate producing the given stdout/exit, then runs the wrapper.
+// runGate copies shizo.sh into an engine dir, optionally installs a stub
+// shizo producing the given stdout/exit, then runs the wrapper.
 func runGate(t *testing.T, installStub bool, stubOut string, stubRC int) (int, string) {
 	return runGateEnv(t, t.TempDir(), installStub, stubOut, stubRC)
 }
@@ -20,17 +20,17 @@ func runGate(t *testing.T, installStub bool, stubOut string, stubRC int) (int, s
 func runGateEnv(t *testing.T, home string, installStub bool, stubOut string, stubRC int) (int, string) {
 	t.Helper()
 	engine := t.TempDir()
-	src, err := os.ReadFile("gate.sh")
+	src, err := os.ReadFile("shizo.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
-	gate := filepath.Join(engine, "gate.sh")
+	gate := filepath.Join(engine, "shizo.sh")
 	if err := os.WriteFile(gate, src, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if installStub {
 		stub := "#!/bin/sh\nprintf '%s' " + shQuote(stubOut) + "\nexit " + itoa(stubRC) + "\n"
-		if err := os.WriteFile(filepath.Join(engine, "bash-gate"), []byte(stub), 0o755); err != nil {
+		if err := os.WriteFile(filepath.Join(engine, "shizo"), []byte(stub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -120,10 +120,10 @@ func TestGateDenyJSONExit2(t *testing.T) {
 
 // A non-writable log dir must fail closed with a specific deny (no command runs
 // unlogged), not fall through to the binary's decision. Here HOME's
-// .bash-gate is a regular file, so mkdir of logs/ fails.
+// .shizo is a regular file, so mkdir of logs/ fails.
 func TestGateUnwritableLogDirDenies(t *testing.T) {
 	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ".bash-gate"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".shizo"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Even if the (unreached) binary would allow, the gate must deny.

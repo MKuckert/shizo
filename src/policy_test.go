@@ -178,9 +178,9 @@ func TestProjectTighteningApplies(t *testing.T) {
 	attestGlobal(t, dir, body)
 	projDir := t.TempDir()
 	projBody := "deny rm ANY\n"
-	proj := writeFile(t, projDir, ".bash-gate", projBody)
+	proj := writeFile(t, projDir, ".shizo", projBody)
 	attestProject(t, dir, proj, projBody)
-	cfg := loadConfig(g, filepath.Join(projDir, ".bash-gate"), installRoot())
+	cfg := loadConfig(g, filepath.Join(projDir, ".shizo"), installRoot())
 	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
 
 	if got, _, _ := decide("rm x", projDir, cfg, env); got != outDeny {

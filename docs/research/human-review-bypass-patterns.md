@@ -1,13 +1,13 @@
 # Human-Review Bypass Patterns in Bash Tool Calls
 
 **Research date:** 2026-09
-**Question:** When bash-gate returns `ask` (falling through to human review), which
+**Question:** When shizo returns `ask` (falling through to human review), which
 command structures reliably fool a human operator skimming the approval prompt?
 
 **Method:** Searched 281 Claude Code session transcripts (~1,850 Bash tool calls)
 for real-world commands where a dangerous payload could hide in plain sight.
 
-**Scope:** Only patterns that survive bash-gate's existing static checks. Patterns
+**Scope:** Only patterns that survive shizo's existing static checks. Patterns
 blocked by the pipeline (env-var prefixes, `bash -c`, shell functions, raw `sed -i`,
 arithmetic expansion) are excluded even though they appeared in session logs.
 
@@ -65,7 +65,7 @@ PY
 | Heredoc targeting config / YAML | 2 | Can alter build pipelines, API endpoints |
 | `python3 -c "..."` inline (shorter) | 20 | Harder to hide payloads due to length, but one-liner JSON parsing is common enough to be waved through |
 
-### What bash-gate could do
+### What shizo could do
 
 A rule like `allow python3 ANY` is the enabler. The heredoc content is not part
 of argv — it arrives on stdin, invisible to argv-based matching. Even a
@@ -78,7 +78,7 @@ Options:
 - **Deny interpreters outright** (`deny python3`, `deny python`, `deny ruby`,
   `deny node`, `deny perl`). Effective but heavy-handed — blocks legitimate
   one-shot uses.
-- **Deny stdin redirection at the AST level.** bash-gate already parses the
+- **Deny stdin redirection at the AST level.** shizo already parses the
   shell AST; it could detect heredocs (`<<`) and stdin pipes (`|`) feeding an
   interpreter and force those to `ask` or `deny` even if the base command is
   allowed. This narrows the attack surface without a blanket interpreter ban.
@@ -146,7 +146,7 @@ The python3 heredoc pattern generalizes to every interpreter that reads code
 from stdin. A stock macOS install with Xcode Command Line Tools ships more of
 these than most operators realize.
 
-`bash-gate` denies all of them in the starter global rules.
+`shizo` denies all of them in the starter global rules.
 
 ### High risk — full file I/O, network, subprocess
 

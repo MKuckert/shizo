@@ -1,4 +1,4 @@
-module bash-gate/ssg
+module shizo/ssg
 
 go 1.27.0
 

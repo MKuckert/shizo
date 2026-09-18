@@ -1,20 +1,20 @@
 {
   "meta": {
-    "name": "bash-gate-example",
+    "name": "shizo-example",
     "version": "1",
-    "description": "Deployment example for wrapping a bash-gate-gated agent. See README.md#example-sandbox-profile before use."
+    "description": "Deployment example for wrapping a shizo-gated agent. See README.md#example-sandbox-profile before use."
   },
   "workdir": {
     "access": "readwrite"
   },
   "filesystem": {
     "read": [
-      "~/.bash-gate",
-      "~/.bash-gate/attestations",
-      "~/.bash-gate/engine",
-      "~/.bash-gate/global"
+      "~/.shizo",
+      "~/.shizo/attestations",
+      "~/.shizo/engine",
+      "~/.shizo/global"
     ],
-    "allow": ["~/.bash-gate/logs", "<AGENT_WORKDIR>"]
+    "allow": ["~/.shizo/logs", "<AGENT_WORKDIR>"]
   },
   "network": {
     "block": true

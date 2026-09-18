@@ -2,7 +2,7 @@
   "$schema": "/Users/mkuckert/.config/nono/nono-profile.schema.json",
   "extends": ["nolabs-ai/claude"],
   "meta": {
-    "name": "bash-gate-claude",
+    "name": "shizo-claude",
     "version": "5"
   },
   "groups": {
@@ -15,8 +15,8 @@
     "allow": [
       "~/.npm",
       "~/.go",
-      "~/.bash-gate/logs",
-      "~/repos/bash-gate"
+      "~/.shizo/logs",
+      "~/repos/shizo"
     ],
     "deny": ["~/.gitconfig"],
     "read_file": [
@@ -29,10 +29,10 @@
     ],
     "read": [
       "~/.CFUserTextEncoding",
-      "~/.bash-gate",
-      "~/.bash-gate/attestations",
-      "~/.bash-gate/engine",
-      "~/.bash-gate/global"
+      "~/.shizo",
+      "~/.shizo/attestations",
+      "~/.shizo/engine",
+      "~/.shizo/global"
     ],
     "bypass_protection": ["~/.bashrc"]
   },

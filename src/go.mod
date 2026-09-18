@@ -1,4 +1,4 @@
-module bash-gate
+module shizo
 
 go 1.27.0
 

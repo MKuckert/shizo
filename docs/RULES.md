@@ -7,8 +7,8 @@ never executed. Shell-style quoting is handled by mvdan's word parser.
 
 | Tier | Location | Required | Directives |
 | --- | --- | --- | --- |
-| Global | `$BASH_GATE_DIR/global/rules`, otherwise `$HOME/.bash-gate/global/rules` | yes | honored |
-| Project | `<cwd>/.bash-gate` (no ancestor search) | no | ignored and logged |
+| Global | `$SHIZO_DIR/global/rules`, otherwise `$HOME/.shizo/global/rules` | yes | honored |
+| Project | `<cwd>/.shizo` (no ancestor search) | no | ignored and logged |
 
 An unreadable or malformed required/present tier denies every command. Project
 allows can change `ask` to `allow`, and project denies can tighten policy, but no
@@ -155,17 +155,17 @@ status allow. Resolution must still place `git` in a trusted directory.
 
 ## Attestation
 
-`bash-gate attest` records operator approval without making files immutable:
+`shizo attest` records operator approval without making files immutable:
 
 ```sh
-bash-gate attest --global
-bash-gate attest [FILE]     # default: <cwd>/.bash-gate
+shizo attest --global
+shizo attest [FILE]     # default: <cwd>/.shizo
 ```
 
 Normalization parses the tier, removes comments and whitespace, sorts rules,
 serializes them canonically, and hashes the result with SHA-256. Cosmetic edits
 therefore do not require approval. Records live under
-`$BASH_GATE_DIR/attestations/`; the global record also stores trusted entries
+`$SHIZO_DIR/attestations/`; the global record also stores trusted entries
 from live `PATH` in search order.
 
 Under `sandbox nono`, every present tier needs a recognized, matching record,
