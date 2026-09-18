@@ -1,4 +1,3 @@
-- Perform default deny list crosscheck (https://github.com/karanb192/claude-code-hooks/blob/main/plugins/block-dangerous-commands/block-dangerous-commands.js)
 - [Root detection and denial under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
 - Find alpha tester?
 - [Allow `trust` in project config to add project-specific binaries](plans/drafts/PLAN-project-trust.md)

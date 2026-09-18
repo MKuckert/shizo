@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SELF=$(basename $BASH_SOURCE)
+SELF=$(basename "$BASH_SOURCE")
 WORKSPACE=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
 SANDBOX_DIR="$WORKSPACE/.sandbox"
 PROFILE_JSON="$SANDBOX_DIR/profile.json"
@@ -20,7 +20,7 @@ if [[ ! -f "$PROFILE_JSON" ]]; then
         echo "$SELF: Copying profile.json from template (v$local_ver). Check contents and adjust to your local environment." >&2
         cp "$PROFILE_TEMPLATE" "$PROFILE_JSON"
     else
-        echo "$SELF: Couldn't find neither profile.json nor profile.template.json" >&2
+        echo "$SELF: Could not find either profile.json or profile.template.json" >&2
         exit 1
     fi
 else
@@ -33,13 +33,22 @@ else
             echo -e "\n\033[33mYour '$PROFILE_JSON' (v$local_ver) is older than the template (v$tpl_ver)!\033[0m" >&2
             echo -e "\033[36m (diff between local config (-) and template (+))\033[0m" >&2
             echo -e "\033[36m--------------------------------------------------------\033[0m" >&2
-            diff -u --color=always "$PROFILE_JSON" "$PROFILE_TEMPLATE" || true
+            # --color=always is GNU-only; BSD diff (macOS) rejects it and the
+            # error would be swallowed by `|| true`, losing the diff itself.
+            # Probe once and degrade to plain output where unsupported.
+            color_opt=""
+            if diff --color=always /dev/null /dev/null >/dev/null 2>&1; then
+                color_opt="--color=always"
+            fi
+            diff -u $color_opt "$PROFILE_JSON" "$PROFILE_TEMPLATE" || true
             echo -e "\033[36m--------------------------------------------------------\033[0m" >&2
             echo "Please adjust your '$PROFILE_JSON' (at least the .meta.version field to $tpl_ver) or delete it to reset.\n" >&2
         fi
     else
         if ! diff -q "$PROFILE_JSON" "$PROFILE_TEMPLATE" >/dev/null 2>&1; then
-          echo -e "\n\033[33mYour '$PROFILE_JSON' differs from the template (v$tpl_ver) but there's no 'jq' installed to check versions.[0m" >&2
+          # No version here: tpl_ver is only assigned in the jq branch, and
+          # interpolating it would abort under set -u on this degraded path.
+          echo -e "\n\033[33mYour '$PROFILE_JSON' differs from the template, but there's no 'jq' installed to check versions.\033[0m" >&2
         fi
     fi
 fi
@@ -56,7 +65,6 @@ run_hook before
 trap 'run_hook after' EXIT
 
 nono wrap \
-  --silent \
   --profile "$PROFILE_JSON" \
   --workdir "$WORKSPACE" \
   --allow-cwd \

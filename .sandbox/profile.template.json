@@ -1,9 +1,9 @@
 {
   "$schema": "/Users/mkuckert/.config/nono/nono-profile.schema.json",
-  "extends": ["nolabs-ai/claude"],
+  "extends": ["nolabs-ai/claude", "nolabs-ai/opencode"],
   "meta": {
     "name": "shizo-claude",
-    "version": "5"
+    "version": "6"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -25,6 +25,7 @@
       "~/.gitconfig-agents",
       "~/.gitignore",
       "~/.bashrc",
+      "~/.bashprofile",
       "/opt/homebrew/bin/go"
     ],
     "read": [
@@ -34,10 +35,15 @@
       "~/.shizo/engine",
       "~/.shizo/global"
     ],
-    "bypass_protection": ["~/.bashrc"]
+    "bypass_protection": ["~/.bashrc", "~/.bashprofile"]
   },
   "network": {
-    "allow_domain": ["localhost", "proxy.golang.org", "sum.golang.org"],
+    "allow_domain": [
+      "localhost",
+      "proxy.golang.org",
+      "sum.golang.org",
+      "github.com"
+    ],
     "open_port_range": [[11400, 11500]]
   },
   "environment": {
@@ -52,7 +58,11 @@
       "LANG",
       "PWD",
       "USER",
-      "EDITOR"
+      "EDITOR",
+      "OMLX_PORT",
+      "OMLX_API_KEY",
+      "APFEL_PORT",
+      "APFEL_TOKEN"
     ],
     "set_vars": {
       "GIT_CONFIG_GLOBAL": "~/.gitconfig-agents",
@@ -71,6 +81,8 @@
       "DISABLE_INSTALL_GITHUB_APP_COMMAND": "1",
       "DISABLE_UPGRADE_COMMAND": "1",
       "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-6",
+      "OPENCODE_ENABLE_EXA": "1",
+      "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS": "1",
       "DO_NOT_TRACK": "1",
       "GOPATH": "~/.go"
     }

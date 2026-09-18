@@ -1,3 +1,4 @@
 /dist
 /public
 /cmd/ssg/ssg
+.DS_Store
