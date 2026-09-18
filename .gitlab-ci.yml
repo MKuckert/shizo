@@ -31,7 +31,12 @@ release:
     - docker
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d/
+  variables:
+    # GitLab's internal CA is self-signed; point Go's TLS stack at the runner-
+    # provided CA bundle so goreleaser can reach the releases API.
+    SSL_CERT_FILE: $CI_SERVER_TLS_CA_FILE
   before_script:
+    - test -n "$SSL_CERT_FILE" && test -r "$SSL_CERT_FILE"
     - go install github.com/goreleaser/goreleaser/v2@v2
   script:
     - goreleaser release --clean
