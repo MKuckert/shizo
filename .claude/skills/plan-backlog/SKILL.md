@@ -32,7 +32,10 @@ Then plan the backlog item described in `$ARGUMENT`:
    to add. Each step is one sentence. The plan is the shortest path that satisfies
    the item. No scaffolding for later, no speculative abstractions.
 
-5. **Call out what you're skipping** and when it would matter, in one line at
+5. **Link the plan.** Update the corresponding entry in the `BACKLOG.md` file to
+   point to the new plan file.
+
+6. **Call out what you're skipping** and when it would matter, in one line at
    the end.
 
 Format:
