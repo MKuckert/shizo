@@ -1,0 +1,2 @@
+allow go test ANY
+allow go build ANY

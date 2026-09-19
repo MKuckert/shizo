@@ -18,6 +18,7 @@ fi
 git branch "${BRANCH}"
 git worktree add "${WORKDIR}" "${BRANCH}"
 cd "${WORKDIR}"
+~/.shizo/engine/shizo attest
 ./run_harness.sh "Use ponytail skill. \
 \
 Implement ${FEATURE} as described in ${PLAN}.\
