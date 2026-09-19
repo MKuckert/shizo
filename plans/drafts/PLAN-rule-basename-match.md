@@ -82,7 +82,8 @@ Symlink aliasing is still open: `/usr/bin/python` symlinked to `python3` has
 basename `python`, so `deny python3 ANY` does not cover it. Closing that needs
 `realpath`, which `docs/ARCHITECTURE.md` rules out (TOCTOU, resolution cost).
 The starter file mitigates it the only way available — deny every alias by
-name. Restate this as a known limit rather than implying the class is fixed.
+name. Restate and document this as a known limit rather than implying the
+class is fixed.
 
 Skipped: denying safe builtins by rule (`cd`, `echo`, … return before rule
 matching and cannot be denied at all); add when a rule needs to constrain one.
