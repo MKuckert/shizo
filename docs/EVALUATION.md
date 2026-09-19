@@ -25,11 +25,15 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
 8. **Reject assignments.** Assignment prefixes and bare assignments deny; they
    can alter execution without appearing in the matched argv.
 9. **Apply unconditional denials.** Execution-hiding commands such as `eval`,
-   `env`, and `sudo` deny before rules and cannot be re-allowed.
+   `env`, and `sudo` deny on the raw basename before resolution and cannot be
+   re-allowed. This fires before step 10 so an unresolvable or untrusted
+   spelling still denies.
 10. **Resolve commands.** Safe builtins are accepted directly. Other commands
     must resolve through inherited `PATH` or from `cwd` to an executable in a
-    trusted directory.
-11. **Match rules.** Global and project denies run before all allows. A match
+    trusted directory. The resolved absolute path is carried into step 11.
+11. **Match rules.** The rule's command token is compared against the resolved
+    path from step 10: a bare-name token matches by basename, an absolute token
+    matches exactly. Global and project denies run before all allows. A match
     yields `deny` or `allow`; no match yields `ask`.
 12. **Contain writes.** Redirect targets must be literal and stay below `cwd`,
     `$TMPDIR`, or `/tmp`; `/dev/null`, `/dev/stdout`, and `/dev/stderr` are also

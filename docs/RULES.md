@@ -59,7 +59,13 @@ allow <command> [token ...] [ANY | HAS <flag>]
 deny  <command> [token ...] [ANY | HAS <flag>]
 ```
 
-Matching is case-sensitive and operates on the program name plus arguments.
+Matching is case-sensitive. The first token of every rule is the **command
+token**. A bare name (`git`, `python3`) matches the basename of the resolved
+executable, so every spelling of the same binary — bare name or absolute path —
+hits the same rule. A command token containing a slash must be absolute and
+matches the resolved path exactly, pinning the rule to one binary. A relative
+command path (e.g. `./deploy.sh`) is a load error.
+
 All global and project denies are checked before either tier's allows. A deny
 match yields `deny`, an allow match yields `allow`, and no match yields `ask`.
 

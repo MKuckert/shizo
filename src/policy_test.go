@@ -168,6 +168,34 @@ func TestLatencyBudget(t *testing.T) {
 	t.Logf("avg decide latency: %v", avg)
 }
 
+// Absolute-path spellings must hit the same rules as bare names (§4.1 basename
+// canonicalization). Both /usr/bin/X and X must match `deny X ANY`.
+func TestPolicyAbsolutePathBypass(t *testing.T) {
+	cfg, env, bin := policyFixture(t, "deny python3 ANY\ndeny git reset HAS --hard\n")
+	mkExe(t, bin, "python3")
+	cwd := t.TempDir()
+
+	cases := []struct {
+		cmd  string
+		want Outcome
+	}{
+		{`python3 -c "1"`, outDeny},
+		{bin + `/python3 -c "1"`, outDeny},
+		{`git push origin`, outDeny},
+		{bin + `/git push origin`, outDeny},
+		{`git reset --hard`, outDeny},
+		{bin + `/git reset --hard`, outDeny},
+		// bare allow still works via resolved basename
+		{bin + `/git status`, outAllow},
+	}
+	for _, tc := range cases {
+		got, reason, _ := decide(tc.cmd, cwd, cfg, env)
+		if got != tc.want {
+			t.Errorf("%q: got %s (%s) want %s", tc.cmd, got, reason, tc.want)
+		}
+	}
+}
+
 func TestProjectTighteningApplies(t *testing.T) {
 	bin := t.TempDir()
 	mkExe(t, bin, "git")

@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 type tokKind int
 
@@ -21,8 +24,38 @@ type rule struct {
 	raw    string // original line, for logs and deny reasons
 }
 
-// matchRule reports whether argv satisfies rule r (§4.1). Pure, no I/O.
-func matchRule(argv []string, r rule) bool {
+// matchCmdToken checks the rule's first token against the resolved path (§4.1).
+// A bare name matches filepath.Base(resolved); a slash-containing token matches
+// resolved exactly.
+func matchCmdToken(tok, resolved string) bool {
+	if strings.ContainsRune(tok, '/') {
+		return tok == resolved
+	}
+	return tok == filepath.Base(resolved)
+}
+
+// matchTok checks one rule token against the argv at position i. Index 0 is
+// the command token and uses resolved-path canonicalization; all others are literal.
+func matchTok(i int, tok, argv, resolved string) bool {
+	if i == 0 {
+		return matchCmdToken(tok, resolved)
+	}
+	return tok == argv
+}
+
+// matchPrefix checks a literal token slice against argv, using matchTok.
+func matchPrefix(toks []ruleToken, argv []string, resolved string) bool {
+	for i, t := range toks {
+		if !matchTok(i, t.text, argv[i], resolved) {
+			return false
+		}
+	}
+	return true
+}
+
+// matchRule reports whether argv satisfies rule r (§4.1). resolved is the
+// absolute path from resolveCommand, used to canonicalize the command token.
+func matchRule(argv []string, resolved string, r rule) bool {
 	hasIdx, anyIdx := -1, -1
 	for i, t := range r.tokens {
 		switch t.kind {
@@ -42,10 +75,8 @@ func matchRule(argv []string, r rule) bool {
 		if len(argv) < len(prefix) {
 			return false
 		}
-		for i, t := range prefix {
-			if argv[i] != t.text {
-				return false
-			}
+		if !matchPrefix(prefix, argv, resolved) {
+			return false
 		}
 		return hasFlag(argv[len(prefix):], flag)
 
@@ -55,10 +86,8 @@ func matchRule(argv []string, r rule) bool {
 		if len(argv) < len(head)+len(tail) {
 			return false
 		}
-		for i, t := range head {
-			if argv[i] != t.text {
-				return false
-			}
+		if !matchPrefix(head, argv, resolved) {
+			return false
 		}
 		for i, t := range tail {
 			if argv[len(argv)-len(tail)+i] != t.text {
@@ -71,12 +100,7 @@ func matchRule(argv []string, r rule) bool {
 		if len(argv) != len(r.tokens) {
 			return false
 		}
-		for i, t := range r.tokens {
-			if argv[i] != t.text {
-				return false
-			}
-		}
-		return true
+		return matchPrefix(r.tokens, argv, resolved)
 	}
 }
 

@@ -112,7 +112,9 @@ func decideCommand(cmd extractedCmd, cfg *config, cwd string, env environ,
 	}
 	base := filepath.Base(name)
 
-	if uncondDeny[base] { // step 9
+	// step 9 — uses raw basename, not resolved path: runs before resolution so
+	// an unresolvable or untrusted `eval` still denies.
+	if uncondDeny[base] {
 		cl.Decision = string(outDeny)
 		setDeny("command '" + base + "' is unconditionally denied")
 		return
@@ -134,14 +136,15 @@ func decideCommand(cmd extractedCmd, cfg *config, cwd string, env environ,
 	}
 	cl.Resolved = res.path
 
-	// step 11 — deny rules first, then allow rules
-	if r, ok := matchAny(cmd.argv, cfg.denyRules); ok {
+	// step 11 — deny rules first, then allow rules. Match against the resolved
+	// path so both bare names and absolute spellings hit the same rules.
+	if r, ok := matchAny(cmd.argv, res.path, cfg.denyRules); ok {
 		cl.Decision = string(outDeny)
 		cl.Rule = r.raw
 		setDeny("denied by rule: " + r.raw)
 		return
 	}
-	if r, ok := matchAny(cmd.argv, cfg.allowRules); ok {
+	if r, ok := matchAny(cmd.argv, res.path, cfg.allowRules); ok {
 		cl.Decision = string(outAllow)
 		cl.Rule = r.raw
 		return
@@ -150,9 +153,9 @@ func decideCommand(cmd extractedCmd, cfg *config, cwd string, env environ,
 	setAsk("no rule matches: " + strings.Join(cl.Argv, " "))
 }
 
-func matchAny(argv []string, rules []rule) (rule, bool) {
+func matchAny(argv []string, resolved string, rules []rule) (rule, bool) {
 	for _, r := range rules {
-		if matchRule(argv, r) {
+		if matchRule(argv, resolved, r) {
 			return r, true
 		}
 	}

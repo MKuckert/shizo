@@ -164,6 +164,20 @@ func TestTrustNeedsAbsolute(t *testing.T) {
 	}
 }
 
+func TestRelativePathRuleDenyAll(t *testing.T) {
+	dir := t.TempDir()
+	for _, body := range []string{
+		"allow ./deploy.sh ANY",
+		"deny ../bin/tool ANY",
+		"allow sub/run ANY",
+	} {
+		g := writeFile(t, dir, "rules", "sandbox nono\n"+body+"\n")
+		if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
+			t.Errorf("%q should deny all (relative command path)", body)
+		}
+	}
+}
+
 func TestBadRuleShapeDenyAll(t *testing.T) {
 	dir := t.TempDir()
 	for _, body := range []string{

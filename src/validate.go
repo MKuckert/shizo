@@ -271,7 +271,34 @@ func denyShadowsAllow(a, d rule) bool {
 		return false
 	}
 	for i := range prefix {
-		if a.tokens[i].kind != tokLiteral || a.tokens[i].text != prefix[i] {
+		if a.tokens[i].kind != tokLiteral {
+			return false
+		}
+		if i == 0 {
+			aCmd, dCmd := a.tokens[0].text, prefix[0]
+			dHasSlash := strings.ContainsRune(dCmd, '/')
+			aHasSlash := strings.ContainsRune(aCmd, '/')
+			switch {
+			case !dHasSlash && !aHasSlash:
+				if aCmd != dCmd {
+					return false
+				}
+			case !dHasSlash && aHasSlash:
+				// Bare deny covers any resolution of that basename.
+				if dCmd != filepath.Base(aCmd) {
+					return false
+				}
+			case dHasSlash && !aHasSlash:
+				// Pinned deny (/usr/bin/git) cannot fully shadow a bare-name
+				// allow — it only fires for one resolved path.
+				return false
+			default:
+				// Both absolute — must match exactly.
+				if aCmd != dCmd {
+					return false
+				}
+			}
+		} else if a.tokens[i].text != prefix[i] {
 			return false
 		}
 	}

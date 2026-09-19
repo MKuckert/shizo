@@ -30,7 +30,7 @@ revisited if either behavior changes.
 | Failure model          | Refuse anything not statically verified                                            | Parse, config, trust, and wrapper failures deny                                    |
 | Outcomes               | deny match → `deny`; allow match → `allow`; unmatched → `ask`                      | Common safe operations avoid prompts without silently accepting unknown commands   |
 | Parser                 | `mvdan.cc/sh/v3/syntax`                                                            | Native Go AST, one dependency, no runtime bridge                                   |
-| Matching               | argv tokens with one linear `ANY` or `HAS` construct                               | Avoids unsafe command-string globbing and backtracking                             |
+| Matching               | argv tokens with one linear `ANY` or `HAS` construct; command token matches the resolved executable basename | Bare names and absolute-path spellings hit the same rules without unsafe globbing  |
 | Dynamic shell features | Inspect substitutions; reject variables, arithmetic, assignments, and functions    | Unknown runtime values cannot bypass matching                                      |
 | Executable trust       | Search inherited `PATH`, then require a configured trusted directory               | Models the binary Bash would choose while rejecting user-writable shadows          |
 | Canonical paths        | Do not use `realpath`                                                              | Policies refer to stable lookup paths rather than versioned symlink targets        |
@@ -81,6 +81,10 @@ that can edit both policy and records makes verification meaningless.
   policy authors enumerate them.
 - Matching occurs before glob, brace, and tilde expansion. Runtime-expanded
   arguments may differ from the literal tokens the policy inspected.
+- Symlink aliasing: `/usr/bin/python` symlinked to `python3` has basename
+  `python`, so `deny python3 ANY` does not cover it. Closing this would
+  require `realpath`, which introduces TOCTOU races and resolution cost.
+  The starter rules mitigate it by denying every known alias by name.
 - Project attestation detects changes but does not prevent them. It trusts the
   sandbox to keep the attestation store read-only and requires one approval per
   machine for every present project tier.

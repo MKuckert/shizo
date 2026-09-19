@@ -151,6 +151,11 @@ func TestDenyShadowsAllow(t *testing.T) {
 		{"closed deny, longer allow", mk(lit("rm"), lit("-rf")), mk(lit("rm")), false},
 		{"deny ANY shadows all", mk(lit("anything"), any), mk(any), true},
 		{"has never shadows", mk(lit("git"), lit("push")), mk(lit("git"), has, lit("-c")), false},
+		// basename canonicalization
+		{"bare deny shadows abs allow", mk(lit("/usr/bin/git"), lit("push"), any), mk(lit("git"), lit("push"), any), true},
+		{"abs deny cannot shadow bare allow", mk(lit("git"), lit("push"), any), mk(lit("/usr/bin/git"), lit("push"), any), false},
+		{"abs deny cannot shadow diff abs", mk(lit("/opt/bin/git"), lit("push"), any), mk(lit("/usr/bin/git"), lit("push"), any), false},
+		{"abs deny same path shadows", mk(lit("/usr/bin/git"), lit("push"), any), mk(lit("/usr/bin/git"), lit("push"), any), true},
 	}
 	for _, c := range cases {
 		if got := denyShadowsAllow(c.a, c.d); got != c.want {

@@ -251,6 +251,12 @@ func buildRule(action string, toks []ruleToken, raw string) (rule, string, bool)
 		}
 	}
 
+	// The first literal is the command token — bare name or absolute path.
+	// A relative path like ./deploy.sh can never match a resolved absolute path.
+	if toks[0].kind == tokLiteral && strings.ContainsRune(toks[0].text, '/') && !filepath.IsAbs(toks[0].text) {
+		return rule{}, "rule command path must be absolute or a bare name: " + raw, false
+	}
+
 	if anyCount > 0 && hasCount > 0 {
 		return rule{}, "ANY and HAS may not appear in the same rule: " + raw, false
 	}

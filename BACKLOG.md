@@ -2,10 +2,6 @@
 
 ## Live bypasses
 
-- [**live bypass: basename-match** 🚨](plans/drafts/PLAN-rule-basename-match.md)
-  > every shipped deny rule is bypassable via absolute path. Total policy bypass.
-  - Blocks: project `trust`.
-
 - [Root detection under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
   > The sandbox assumption is false when running as root.
 
