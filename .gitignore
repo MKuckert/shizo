@@ -2,3 +2,4 @@
 /public
 /cmd/ssg/ssg
 .DS_Store
+tools/pathaudit.state/
