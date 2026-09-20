@@ -41,8 +41,10 @@ path.
 ### `sandbox <nono|dangerously-none>`
 
 Exactly one `sandbox` directive is required. `nono` denies unless
-`NONO_CAP_FILE` is set. `dangerously-none` removes that protection and is only
-appropriate in a trusted, unconfined environment. Missing, duplicate, or
+`NONO_CAP_FILE` is set and the effective user is non-root (`euid != 0`); root
+bypasses POSIX file permissions, so the read-only attestation store that
+`nono` depends on cannot be enforced. `dangerously-none` removes both
+protections and is the only mode that permits root. Missing, duplicate, or
 unknown values fail the tier.
 
 ### `returntype <decision|automode>`

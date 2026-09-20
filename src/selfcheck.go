@@ -89,6 +89,13 @@ func selfcheckResults(root string) []checkResult {
 
 	var out []checkResult
 
+	notRoot := euidFn() != 0
+	detail := ""
+	if !notRoot {
+		detail = "euid=0"
+	}
+	out = append(out, checkResult{"not running as root", notRoot, detail})
+
 	sandboxed := os.Getenv("NONO_CAP_FILE") != ""
 	out = append(out, checkResult{"sandboxed (NONO_CAP_FILE set)", sandboxed, ""})
 

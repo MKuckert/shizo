@@ -181,6 +181,9 @@ func TestSelfcheckResultsOutsideSandbox(t *testing.T) {
 		byName[r.Name] = r
 	}
 
+	if !byName["not running as root"].Pass {
+		t.Error("not-root check should pass for non-root user")
+	}
 	if byName["sandboxed (NONO_CAP_FILE set)"].Pass {
 		t.Error("sandboxed check should fail without NONO_CAP_FILE")
 	}
@@ -193,8 +196,29 @@ func TestSelfcheckResultsOutsideSandbox(t *testing.T) {
 	if !byName["config loads clean"].Pass {
 		t.Errorf("config loads clean should pass: %+v", byName["config loads clean"])
 	}
-	if len(results) != 8 {
-		t.Errorf("got %d results, want 8", len(results))
+	if len(results) != 9 {
+		t.Errorf("got %d results, want 9", len(results))
+	}
+}
+
+func TestSelfcheckRootCheckFails(t *testing.T) {
+	root := setupSelfcheck(t)
+
+	old := euidFn
+	euidFn = func() int { return 0 }
+	defer func() { euidFn = old }()
+
+	results := selfcheckResults(root)
+	byName := map[string]checkResult{}
+	for _, r := range results {
+		byName[r.Name] = r
+	}
+	r := byName["not running as root"]
+	if r.Pass {
+		t.Error("not-root check should fail when euid=0")
+	}
+	if r.Detail != "euid=0" {
+		t.Errorf("detail=%q, want euid=0", r.Detail)
 	}
 }
 

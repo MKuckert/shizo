@@ -2,9 +2,6 @@
 
 ## Live bypasses
 
-- [Root detection under `sandbox nono`](plans/drafts/PLAN-root-detection.md)
-  > The sandbox assumption is false when running as root.
-
 - [**stdin-gate**](plans/drafts/PLAN-stdin-gate.md)
   > Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
   - Same class as the `<subst>` issue — shared design.

@@ -20,7 +20,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 	// a read-only attestation store — use dangerously-none to skip the
 	// sandbox gate and writability probe that are untestable as root.
 	sandbox := "sandbox nono"
-	if os.Getuid() == 0 {
+	if euidFn() == 0 {
 		sandbox = "sandbox dangerously-none"
 	}
 	body := sandbox + "\ntrust " + bin + "\n" + rulesBody
@@ -30,7 +30,7 @@ func setupRun(t *testing.T, rulesBody string) string {
 	t.Setenv("HOME", t.TempDir()) // isolate logs
 	attestGlobal(t, root, body)
 	lockdownAttestDir(t, root)
-	if os.Getuid() != 0 {
+	if euidFn() != 0 {
 		t.Setenv("NONO_CAP_FILE", "/tmp/fake-cap")
 	}
 	old := hookRootFn
@@ -249,6 +249,38 @@ func TestHookDeniesWhenHookRootEmpty(t *testing.T) {
 	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
 	if rc != 2 || decisionOf(t, out) != "deny" {
 		t.Errorf("empty hookRoot should deny: rc=%d out=%s", rc, out)
+	}
+}
+
+func TestRootDeniedUnderNono(t *testing.T) {
+	if reason := rootBlocksNono(0, "nono"); reason == "" {
+		t.Error("euid=0 + nono should produce a deny reason")
+	}
+	if reason := rootBlocksNono(0, "dangerously-none"); reason != "" {
+		t.Errorf("euid=0 + dangerously-none should not deny, got %q", reason)
+	}
+	if reason := rootBlocksNono(1000, "nono"); reason != "" {
+		t.Errorf("euid=1000 + nono should not deny, got %q", reason)
+	}
+}
+
+func TestLoadConfigRootGate(t *testing.T) {
+	root := t.TempDir()
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	body := "sandbox nono\ntrust " + bin + "\nallow git status ANY\n"
+	writeFile(t, root, "global/rules", body)
+
+	old := euidFn
+	euidFn = func() int { return 0 }
+	defer func() { euidFn = old }()
+
+	cfg := loadConfig(filepath.Join(root, "global", "rules"), "", root)
+	if !cfg.denyAll {
+		t.Error("loadConfig should deny-all when euid=0 under sandbox nono")
+	}
+	if !strings.Contains(cfg.denyReason, "non-root") {
+		t.Errorf("deny reason should mention non-root, got %q", cfg.denyReason)
 	}
 }
 

@@ -87,7 +87,9 @@ that can edit both policy and records makes verification meaningless.
   The starter rules mitigate it by denying every known alias by name.
 - Project attestation detects changes but does not prevent them. It trusts the
   sandbox to keep the attestation store read-only and requires one approval per
-  machine for every present project tier.
+  machine for every present project tier. Root (`euid == 0`) bypasses POSIX
+  file permissions, so `sandbox nono` explicitly rejects root to maintain this
+  invariant; `dangerously-none` is required for root environments.
 - `automode` delegates unmatched commands to Claude Code's classifier, so its
   treatment of unknown commands replaces the guaranteed prompt.
 - Rejecting assignments and dynamic argv blocks legitimate forms such as

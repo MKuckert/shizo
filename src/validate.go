@@ -141,7 +141,6 @@ func validateFile(file, content string, project bool) []finding {
 		out = append(out, finding{file, 0, levelError,
 			"global tier must declare a sandbox directive (nono or dangerously-none)"})
 	}
-
 	out = append(out, lintDeadRules(cfg, file, lineByRaw)...)
 	out = append(out, lintShadowedAllows(cfg, file, lineByRaw)...)
 	out = append(out, lintIgnoredDirectives(cfg, file, lineByRaw)...)

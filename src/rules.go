@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"mvdan.cc/sh/v3/syntax"
 )
@@ -22,6 +23,17 @@ type config struct {
 
 func denyAllConfig(reason string) *config {
 	return &config{returnMode: "decision", denyAll: true, denyReason: reason}
+}
+
+// euidFn is the effective-UID source, overridable in tests.
+var euidFn = syscall.Geteuid
+
+// rootBlocksNono returns a deny reason when euid == 0 under sandbox nono.
+func rootBlocksNono(euid int, mode string) string {
+	if mode == "nono" && euid == 0 {
+		return "sandbox nono requires a non-root user (euid=0); use 'sandbox dangerously-none' for root environments"
+	}
+	return ""
 }
 
 // loadConfig reads the global tier (required) and project tier (optional).
@@ -42,6 +54,9 @@ func loadConfig(globalPath, projectPath, root string) *config {
 	// sandbox is required in the global tier — absence fails closed (§3).
 	if cfg.sandboxMode == "" {
 		return denyAllConfig("global tier must declare a sandbox directive (nono or dangerously-none)")
+	}
+	if reason := rootBlocksNono(euidFn(), cfg.sandboxMode); reason != "" {
+		return denyAllConfig(reason)
 	}
 
 	var projectData []byte
