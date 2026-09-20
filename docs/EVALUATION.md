@@ -16,6 +16,11 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
 5. **Walk the complete AST.** Commands and redirects are collected from lists,
    pipelines, substitutions, subshells, loops, conditionals, cases, and function
    bodies. Any function declaration denies because it can shadow a trusted name.
+   Stdin-fed commands are identified: the right-hand side of a pipe and commands
+   with an fd 0 redirect (`<`, `<<`, `<<-`, `<<<`, `<>`) are marked. When stdin
+   feeds a compound command (block, subshell, loop, conditional) rather than a
+   simple `CallExpr`, the entire invocation is denied because the receiving
+   command is not statically identifiable.
 6. **Resolve words.** Literals, single-quoted words, and fully literal
    double-quoted words become argv tokens. Command and process substitutions
    become `<subst>` in the outer argv while their contents are checked
@@ -33,8 +38,11 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
     trusted directory. The resolved absolute path is carried into step 11.
 11. **Match rules.** The rule's command token is compared against the resolved
     path from step 10: a bare-name token matches by basename, an absolute token
-    matches exactly. Global and project denies run before all allows. A match
-    yields `deny` or `allow`; no match yields `ask`.
+    matches exactly. Global and project denies run first, then ask rules, then
+    allows. A match yields `deny`, `ask`, or `allow`; no match yields `ask`. A
+    `STDIN`-marked rule only matches stdin-fed commands. When the result is
+    `allow` and the command is stdin-fed, the outcome is downgraded to the
+    `stdin` directive's value (`allow` by default).
 12. **Contain writes.** Redirect targets must be literal and stay below `cwd`,
     `$TMPDIR`, or `/tmp`; `/dev/null`, `/dev/stdout`, and `/dev/stderr` are also
     valid. If the command list contains `cd`, all write redirects deny. Read

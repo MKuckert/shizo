@@ -11,14 +11,16 @@ import (
 )
 
 type config struct {
-	trusted     []string
-	returnMode  string // "decision" (default) or "automode"
-	sandboxMode string // "nono" or "dangerously-none" — required in the global tier, no default
-	allowRules  []rule
-	denyRules   []rule
-	ignored     []string // ignored project-tier directive lines (logged)
-	denyAll     bool
-	denyReason  string
+	trusted      []string
+	returnMode   string // "decision" (default) or "automode"
+	sandboxMode  string // "nono" or "dangerously-none" — required in the global tier, no default
+	stdinDefault string // "allow" (default), "ask", or "deny"
+	allowRules   []rule
+	denyRules    []rule
+	askRules     []rule
+	ignored      []string // ignored project-tier directive lines (logged)
+	denyAll      bool
+	denyReason   string
 }
 
 func denyAllConfig(reason string) *config {
@@ -72,6 +74,10 @@ func loadConfig(globalPath, projectPath, root string) *config {
 		} else if !os.IsNotExist(err) {
 			return denyAllConfig("project rules unreadable (" + projectPath + "): " + err.Error())
 		}
+	}
+
+	if cfg.stdinDefault == "" {
+		cfg.stdinDefault = "allow"
 	}
 
 	// dangerously-none: attestation adds latency for zero security value —
@@ -136,11 +142,12 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 }
 
 // tierState carries the per-file "seen" flags across parseLine calls: rules must
-// follow directives, and returntype/sandbox may appear at most once.
+// follow directives, and returntype/sandbox/stdin may appear at most once.
 type tierState struct {
 	sawRule       bool
 	sawReturntype bool
 	sawSandbox    bool
+	sawStdin      bool
 }
 
 // parseTier folds one rules file into cfg. Returns (reason, false) on the first
@@ -226,6 +233,24 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string
 		cfg.sandboxMode = toks[1].text
 		st.sawSandbox = true
 
+	case "stdin":
+		if project {
+			cfg.ignored = append(cfg.ignored, trimmed)
+			return "", true
+		}
+		if st.sawRule {
+			return "directive after rules: " + trimmed, false
+		}
+		if st.sawStdin {
+			return "duplicate stdin: " + trimmed, false
+		}
+		if len(toks) != 2 || toks[1].kind != tokLiteral ||
+			(toks[1].text != "allow" && toks[1].text != "ask" && toks[1].text != "deny") {
+			return "stdin must be allow, ask, or deny: " + trimmed, false
+		}
+		cfg.stdinDefault = toks[1].text
+		st.sawStdin = true
+
 	case "allow":
 		r, reason, ok := buildRule("allow", toks[1:], trimmed)
 		if !ok {
@@ -242,6 +267,14 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string
 		cfg.denyRules = append(cfg.denyRules, r)
 		st.sawRule = true
 
+	case "ask":
+		r, reason, ok := buildRule("ask", toks[1:], trimmed)
+		if !ok {
+			return reason, false
+		}
+		cfg.askRules = append(cfg.askRules, r)
+		st.sawRule = true
+
 	default:
 		return "unknown directive: " + trimmed, false
 	}
@@ -249,10 +282,19 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string
 	return "", true
 }
 
-// buildRule validates the token stream of an allow/deny line (§4.1).
+// buildRule validates the token stream of an allow/deny/ask line (§4.1).
 func buildRule(action string, toks []ruleToken, raw string) (rule, string, bool) {
 	if len(toks) == 0 {
 		return rule{}, "rule needs at least one token: " + raw, false
+	}
+
+	stdinOnly := false
+	if toks[0].kind == tokSTDIN {
+		stdinOnly = true
+		toks = toks[1:]
+		if len(toks) == 0 {
+			return rule{}, "STDIN needs a command after it: " + raw, false
+		}
 	}
 
 	anyCount, hasCount, hasIdx := 0, 0, -1
@@ -263,6 +305,8 @@ func buildRule(action string, toks []ruleToken, raw string) (rule, string, bool)
 		case tokHAS:
 			hasCount++
 			hasIdx = i
+		case tokSTDIN:
+			return rule{}, "STDIN must be the first token: " + raw, false
 		}
 	}
 
@@ -294,7 +338,7 @@ func buildRule(action string, toks []ruleToken, raw string) (rule, string, bool)
 		}
 	}
 
-	return rule{action: action, tokens: toks, raw: raw}, "", true
+	return rule{action: action, tokens: toks, raw: raw, stdinOnly: stdinOnly}, "", true
 }
 
 // parseRuleWords splits one rule line into tokens using the shell parser,
@@ -320,7 +364,7 @@ func parseRuleWords(line string) ([]ruleToken, error) {
 	return toks, nil
 }
 
-// keyword returns the keyword kind if w is a bare (unquoted) ANY or HAS literal.
+// keyword returns the keyword kind if w is a bare (unquoted) ANY, HAS, or STDIN literal.
 func keyword(w *syntax.Word) (tokKind, bool) {
 	if len(w.Parts) != 1 {
 		return 0, false
@@ -334,6 +378,8 @@ func keyword(w *syntax.Word) (tokKind, bool) {
 		return tokANY, true
 	case "HAS":
 		return tokHAS, true
+	case "STDIN":
+		return tokSTDIN, true
 	}
 	return 0, false
 }

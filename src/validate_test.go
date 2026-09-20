@@ -220,6 +220,31 @@ func TestRunValidateInstalledMissingGlobal(t *testing.T) {
 	}
 }
 
+func TestValidateStdinDirectiveIgnoredInProject(t *testing.T) {
+	body := "stdin deny\ndeny rm ANY\n"
+	fs := validateFile(".shizo", body, true)
+	if !hasMsg(fs, "directive ignored in project tier") {
+		t.Errorf("expected ignored stdin directive warning: %+v", fs)
+	}
+}
+
+func TestValidateDeadStdinRules(t *testing.T) {
+	body := "stdin deny\nsandbox nono\nallow STDIN grep ANY\n"
+	fs := validateFile("rules", body, false)
+	if !hasMsg(fs, "STDIN allow rule has no effect") {
+		t.Errorf("expected dead STDIN allow warning under stdin deny: %+v", fs)
+	}
+}
+
+func TestValidateAskVerb(t *testing.T) {
+	dir := t.TempDir()
+	body := "sandbox nono\ntrust " + dir + "\nask rm HAS -rf\nallow rm ANY\n"
+	fs := validateFile("rules", body, false)
+	if errs, _ := countLevels(fs); errs != 0 {
+		t.Errorf("ask verb should be valid: %+v", fs)
+	}
+}
+
 func TestCheckTrustDir(t *testing.T) {
 	dir := t.TempDir()
 	if _, ok := checkTrustDir(dir); !ok {

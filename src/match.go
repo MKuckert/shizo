@@ -11,6 +11,7 @@ const (
 	tokLiteral tokKind = iota
 	tokANY
 	tokHAS
+	tokSTDIN
 )
 
 type ruleToken struct {
@@ -19,9 +20,10 @@ type ruleToken struct {
 }
 
 type rule struct {
-	action string // "allow" or "deny"
-	tokens []ruleToken
-	raw    string // original line, for logs and deny reasons
+	action    string // "allow", "deny", or "ask"
+	tokens    []ruleToken
+	raw       string // original line, for logs and deny reasons
+	stdinOnly bool   // STDIN marker: rule applies only to stdin-fed commands
 }
 
 // matchCmdToken checks the rule's first token against the resolved path (§4.1).
@@ -55,7 +57,11 @@ func matchPrefix(toks []ruleToken, argv []string, resolved string) bool {
 
 // matchRule reports whether argv satisfies rule r (§4.1). resolved is the
 // absolute path from resolveCommand, used to canonicalize the command token.
-func matchRule(argv []string, resolved string, r rule) bool {
+// stdinFed gates STDIN-only rules: they never match a non-stdin-fed command.
+func matchRule(argv []string, resolved string, stdinFed bool, r rule) bool {
+	if r.stdinOnly && !stdinFed {
+		return false
+	}
 	hasIdx, anyIdx := -1, -1
 	for i, t := range r.tokens {
 		switch t.kind {

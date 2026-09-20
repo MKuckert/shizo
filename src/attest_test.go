@@ -174,7 +174,7 @@ func TestLoadConfigDeniesOnNormVersionBump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec["norm-version"] = "2"
+	rec["norm-version"] = "999"
 	if err := writeAttestRecord(globalAttestPath(dir), rec, ""); err != nil {
 		t.Fatal(err)
 	}

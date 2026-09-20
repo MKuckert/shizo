@@ -146,14 +146,15 @@ func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
 	cfg := loadConfig(gPath, projectRulesPathFor(in.Cwd), root)
 
 	var (
-		outcome Outcome
-		reason  string
-		logs    []cmdLog
+		outcome     Outcome
+		reason      string
+		logs        []cmdLog
+		askExplicit bool
 	)
 	if inErr != "" {
 		outcome, reason = outDeny, inErr
 	} else {
-		outcome, reason, logs = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
+		outcome, reason, logs, askExplicit = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
 	}
 
 	logDecision(in, outcome, reason, logs) // best effort; never changes the decision
@@ -163,8 +164,9 @@ func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
 		emitDecision(stdout, outDeny, reason)
 		return 2
 	default: // allow / ask
-		if cfg.returnMode == "automode" && outcome == outAsk {
-			fmt.Fprint(stdout, "defer") // §2.1: defer only the fallthrough, not explicit allows
+		// §2.1: defer only unmatched fallthrough, not explicit ask rules
+		if cfg.returnMode == "automode" && outcome == outAsk && !askExplicit {
+			fmt.Fprint(stdout, "defer")
 			return 0
 		}
 		emitDecision(stdout, outcome, reason)
@@ -239,6 +241,7 @@ type cmdLog struct {
 	Resolved string   `json:"resolved,omitempty"`
 	Decision string   `json:"decision"`
 	Rule     string   `json:"rule,omitempty"`
+	StdinFed bool     `json:"stdin_fed,omitempty"`
 }
 
 type logLine struct {

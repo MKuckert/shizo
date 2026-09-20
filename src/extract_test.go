@@ -149,6 +149,78 @@ func TestBackslashNotDeEscaped(t *testing.T) {
 	}
 }
 
+func TestStdinFed(t *testing.T) {
+	cases := []struct {
+		src      string
+		wantFed  []bool // per-command stdinFed
+	}{
+		// pipe RHS is stdin-fed
+		{`git log | grep foo`, []bool{false, true}},
+		// heredoc
+		{`cat <<EOF` + "\nhi\nEOF\n", []bool{true}},
+		// herestring
+		{`cat <<< hello`, []bool{true}},
+		// input redirect
+		{`grep foo < file.txt`, []bool{true}},
+		// fd 2 redirect is NOT stdin
+		{`cmd 2< file.txt`, []bool{false}},
+		// nested pipes: both RHS are stdin-fed
+		{`git log | grep foo | head -5`, []bool{false, true, true}},
+		// no stdin
+		{`git status && ls -la`, []bool{false, false}},
+		// read-write (<>) on fd 0
+		{`cmd <> file`, []bool{true}},
+	}
+	for _, tc := range cases {
+		f, err := parse(t, tc.src)
+		if err != nil {
+			t.Fatalf("%q: parse error: %v", tc.src, err)
+		}
+		ex := extract(f)
+		if len(ex.commands) != len(tc.wantFed) {
+			t.Errorf("%q: got %d commands want %d", tc.src, len(ex.commands), len(tc.wantFed))
+			continue
+		}
+		for i, cmd := range ex.commands {
+			if cmd.stdinFed != tc.wantFed[i] {
+				t.Errorf("%q cmd[%d] (%v): stdinFed=%v want %v",
+					tc.src, i, displayArgv(cmd.argv), cmd.stdinFed, tc.wantFed[i])
+			}
+		}
+	}
+}
+
+func TestStdinCompound(t *testing.T) {
+	// pipe into a block group: all inner commands get stdinCompound
+	f, err := parse(t, `curl x | { python3; }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ex := extract(f)
+	found := false
+	for _, cmd := range ex.commands {
+		if cmd.stdinCompound {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("pipe into { } should mark inner commands as stdinCompound")
+	}
+
+	// pipe into a subshell
+	f, _ = parse(t, `curl x | ( python3 )`)
+	ex = extract(f)
+	found = false
+	for _, cmd := range ex.commands {
+		if cmd.stdinCompound {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("pipe into ( ) should mark inner commands as stdinCompound")
+	}
+}
+
 // unclosed quote must surface a parse error.
 func TestUnclosedQuote(t *testing.T) {
 	_, err := parse(t, `git commit -m "unclosed`)

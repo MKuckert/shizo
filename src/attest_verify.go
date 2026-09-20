@@ -17,7 +17,7 @@ import (
 
 const (
 	attestSchema = "1"
-	normVersion  = "1"
+	normVersion  = "2"
 )
 
 // tierNorm is one tier's canonical (order/comment/whitespace-independent)
@@ -45,7 +45,7 @@ func normalizeTier(content string, project bool) (tierNorm, string, bool) {
 // canonicalizeTier serializes a parsed tier deterministically: directives
 // (global only) then allow/deny rules, each group sorted, so comment/
 // whitespace/rule-order edits don't change the hash. Sound only because
-// evaluation is order-independent (deny > allow > ask, RULES.md §4) — a rule's
+// evaluation is order-independent (deny > ask > allow, RULES.md §4) — a rule's
 // effect never depends on its position relative to other rules of the same
 // action.
 func canonicalizeTier(cfg *config, project bool) string {
@@ -53,6 +53,7 @@ func canonicalizeTier(cfg *config, project bool) string {
 	if !project {
 		lines = append(lines, "returntype "+cfg.returnMode)
 		lines = append(lines, "sandbox "+cfg.sandboxMode)
+		lines = append(lines, "stdin "+cfg.stdinDefault)
 		trusted := append([]string{}, cfg.trusted...)
 		sort.Strings(trusted)
 		for _, t := range trusted {
@@ -60,6 +61,7 @@ func canonicalizeTier(cfg *config, project bool) string {
 		}
 	}
 	lines = append(lines, sortedRuleLines(cfg.allowRules)...)
+	lines = append(lines, sortedRuleLines(cfg.askRules)...)
 	lines = append(lines, sortedRuleLines(cfg.denyRules)...)
 	return strings.Join(lines, "\n")
 }
@@ -81,6 +83,9 @@ func sortedRuleLines(rules []rule) []string {
 // a tamper that changes token boundaries would hash identically and pass.
 func serializeRule(r rule) string {
 	parts := []string{r.action}
+	if r.stdinOnly {
+		parts = append(parts, "STDIN")
+	}
 	for _, t := range r.tokens {
 		switch t.kind {
 		case tokANY:

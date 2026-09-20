@@ -185,10 +185,97 @@ func TestBadRuleShapeDenyAll(t *testing.T) {
 		"allow git ANY ANY",       // two ANY
 		"allow HAS -c",            // HAS with no command
 		"allow git HAS -c status", // token after HAS flag
+		"allow STDIN",             // STDIN with no command after it
+		"allow git STDIN ANY",     // STDIN in mid-rule position
 	} {
 		g := writeFile(t, dir, "rules", body+"\n")
 		if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
 			t.Errorf("%q should deny all", body)
 		}
+	}
+}
+
+func TestStdinOnlyParsing(t *testing.T) {
+	dir := t.TempDir()
+	body := "sandbox nono\ndeny STDIN python3 ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll {
+		t.Fatal("STDIN rule should parse: " + cfg.denyReason)
+	}
+	if len(cfg.denyRules) != 1 || !cfg.denyRules[0].stdinOnly {
+		t.Errorf("STDIN rule not parsed correctly: %+v", cfg.denyRules)
+	}
+}
+
+func TestQuotedStdinLiteral(t *testing.T) {
+	dir := t.TempDir()
+	body := "sandbox nono\nallow tool 'STDIN'\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll {
+		t.Fatal("quoted 'STDIN' should be a literal: " + cfg.denyReason)
+	}
+	if len(cfg.allowRules) != 1 || cfg.allowRules[0].stdinOnly {
+		t.Error("quoted 'STDIN' must not set stdinOnly")
+	}
+	if cfg.allowRules[0].tokens[1].text != "STDIN" {
+		t.Error("quoted 'STDIN' should be a literal token with text STDIN")
+	}
+}
+
+func TestAskVerb(t *testing.T) {
+	dir := t.TempDir()
+	body := "sandbox nono\nask rm HAS -rf\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll {
+		t.Fatal("ask rule should parse: " + cfg.denyReason)
+	}
+	if len(cfg.askRules) != 1 || cfg.askRules[0].action != "ask" {
+		t.Errorf("ask rule not parsed: %+v", cfg.askRules)
+	}
+}
+
+func TestStdinDirective(t *testing.T) {
+	dir := t.TempDir()
+	// valid stdin ask
+	body := "stdin ask\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "a/rules", body)
+	attestGlobal(t, dir, body)
+	cfg := loadConfig(g, "", installRoot())
+	if cfg.denyAll || cfg.stdinDefault != "ask" {
+		t.Errorf("stdin ask: %+v", cfg)
+	}
+	// duplicate stdin
+	g = writeFile(t, dir, "b/rules", "stdin ask\nstdin deny\nsandbox nono\n")
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
+		t.Error("duplicate stdin should deny all")
+	}
+	// unknown value
+	g = writeFile(t, dir, "c/rules", "stdin wat\nsandbox nono\n")
+	if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
+		t.Error("unknown stdin value should deny all")
+	}
+	// project tier ignores stdin
+	body = "sandbox nono\nallow ls ANY\n"
+	g = writeFile(t, dir, "d/rules", body)
+	attestGlobal(t, dir, body)
+	projDir := t.TempDir()
+	projBody := "stdin deny\ndeny rm ANY\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody)
+	cfg = loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal("project stdin should be ignored: " + cfg.denyReason)
+	}
+	if cfg.stdinDefault == "deny" {
+		t.Error("project stdin directive must not take effect")
+	}
+	if len(cfg.ignored) != 1 {
+		t.Errorf("expected 1 ignored directive, got %v", cfg.ignored)
 	}
 }

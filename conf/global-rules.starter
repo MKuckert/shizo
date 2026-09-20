@@ -15,6 +15,12 @@ returntype decision
 # - dangerously-none: drops the gate and runs with no sandbox. No real protection.
 sandbox nono
 
+# stdin: what to do when a rule-allowed command receives piped/redirected stdin.
+# - allow: (default) stdin-fed commands pass through normally
+# - ask: downgrade to ask so the operator sees the pipeline
+# - deny: deny any allowed command that receives stdin
+# stdin allow
+
 # Trusted directories for executable binary (resolved via the inherited PATH, no realpath).
 trust /opt/homebrew/bin
 trust /bin
@@ -42,6 +48,12 @@ allow git config --list ANY
 allow ls ANY
 allow cat ANY
 allow rg ANY
+
+# deny piped interpreters — STDIN restricts a rule to stdin-fed commands only
+# deny STDIN python3 ANY
+# deny STDIN bash ANY
+# deny STDIN sh ANY
+# ask STDIN bash HAS -c
 
 # no push (human-in-the-loop)
 deny git push ANY

@@ -303,3 +303,19 @@ func TestRunAutomodeDefer(t *testing.T) {
 		t.Errorf("automode deny: rc=%d out=%q", rc, out)
 	}
 }
+
+func TestRunAutomodeExplicitAskNotDeferred(t *testing.T) {
+	bin := setupRun(t, "returntype automode\nask rm HAS -rf\nallow rm ANY\n")
+	mkExe(t, bin, "rm")
+	// explicit ask rule -> should emit ask decision, NOT defer
+	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"},"cwd":"/tmp"}`)
+	if rc != 0 {
+		t.Errorf("explicit ask: rc=%d", rc)
+	}
+	if out == "defer" {
+		t.Error("explicit ask rule must not defer in automode")
+	}
+	if decisionOf(t, out) != "ask" {
+		t.Errorf("explicit ask should emit ask decision, got %q", out)
+	}
+}

