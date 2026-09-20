@@ -21,5 +21,6 @@ cd "${WORKDIR}"
 ~/.shizo/engine/shizo attest
 ./run_harness.sh "Use ponytail skill. \
 \
-Implement ${FEATURE} as described in ${PLAN}.\
-Follow the plan step by step. If you encounter any issues, refer to the plan for guidance or ask the user."
+Implement ${FEATURE} as described in ${PLAN}. \
+Follow the plan step by step. If you encounter any issues, refer to the plan for guidance or ask the user. \
+Run a @code-review agent in the background once after completing the implementation to review the code and provide feedback."
