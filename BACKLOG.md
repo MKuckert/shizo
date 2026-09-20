@@ -5,8 +5,7 @@
 Rule DSL cannot express the threat
 
 - [**ask-rule**](plans/drafts/PLAN-ask-rule.md)
-  > Add an `ask` rule to force operator prompting (e.g. `rm -rf`), even in automode
-  - Soft prerequisite for the two below: `ask` is the usable outcome where a hard deny breaks real workflows.
+  > `ask` rule rework and refactoring
 
 - [**has-value-prefix**](plans/drafts/PLAN-has-value-prefix.md)
   > Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar.
