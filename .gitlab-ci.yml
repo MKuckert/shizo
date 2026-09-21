@@ -8,8 +8,20 @@ test:
   image: golang:1.27
   tags:
     - docker
+  variables:
+    # The image's /go and /root/.cache are root-owned; redirect both so the
+    # unprivileged `ci` user below has writable build caches.
+    GOPATH: /tmp/go
+    GOCACHE: /tmp/go-cache
+  before_script:
+    # The test suite refuses to run as root, but the runner starts the
+    # container as root and we can't touch the runner config — so create an
+    # unprivileged user and hand it the repo plus the caches.
+    - useradd -m -u 1000 ci
+    - mkdir -p "$GOPATH" "$GOCACHE"
+    - chown -R ci:ci "$GOPATH" "$GOCACHE" "$CI_PROJECT_DIR"
   script:
-    - make test
+    - su ci -c 'make test'
 
 pages:
   stage: pages
