@@ -111,8 +111,21 @@ func matchRule(argv []string, resolved string, stdinFed bool, r rule) bool {
 }
 
 // hasFlag reports whether flag appears anywhere in rest, applying =-splitting
-// (--output=/tmp/x tests as --output) and single-dash bundle matching (-f in -rf).
+// (--output=/tmp/x tests as --output), value-prefix matching for flags spelled
+// with '=', and single-dash bundle matching (-f in -rf).
 func hasFlag(rest []string, flag string) bool {
+	// A flag spelled with '=' matches the token exactly or at an '=' boundary
+	// (HAS --checkpoint-action=exec matches --checkpoint-action=exec=CMD but
+	// not --checkpoint-action=execute). A trailing '=' means "any value".
+	if strings.IndexByte(flag, '=') >= 0 {
+		for _, tok := range rest {
+			if tok == flag || strings.HasPrefix(tok, flag+"=") ||
+				(strings.HasSuffix(flag, "=") && strings.HasPrefix(tok, flag)) {
+				return true
+			}
+		}
+		return false
+	}
 	shortBundle := len(flag) == 2 && flag[0] == '-' && flag[1] != '-'
 	for _, tok := range rest {
 		base := tok

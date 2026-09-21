@@ -1,13 +1,5 @@
 # Backlog
 
-## Coverage gaps
-
-Rule DSL cannot express the threat
-
-- [**has-value-prefix**](plans/drafts/PLAN-has-value-prefix.md)
-  > Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar.
-  - Stands alone as deny-only; wants `ask` for the softer verdict.
-
 ## CLI surface & adoption
 
 - [**rename-hook**](plans/drafts/PLAN-rename-hook-pretooluse.md)

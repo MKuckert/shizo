@@ -103,12 +103,17 @@ allow ddev ANY phpunit
 `HAS <flag>` finds one flag anywhere after the preceding literal prefix. It
 must be the rule's final construct and may appear once. Long options are split
 at `=`, so `HAS --output` matches `--output=file`; a two-character short flag
-also matches bundles, so `HAS -f` matches `-rf`.
+also matches bundles, so `HAS -f` matches `-rf`. A flag written with an `=`
+pins down the value: `HAS --checkpoint-action=exec` matches
+`--checkpoint-action=exec` and `--checkpoint-action=exec=CMD`, but neither
+`--checkpoint-action=display` nor `--checkpoint-action=execute`. A trailing
+`=` accepts any value, so `HAS --output=` matches `--output=file`.
 
 ```text
 deny git reset HAS --hard
 deny git HAS -c
 deny find HAS -exec
+deny tar HAS --checkpoint-action=exec
 ```
 
 `ANY` and `HAS` cannot share a rule. Single-quote either word to match it

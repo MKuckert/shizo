@@ -70,6 +70,13 @@ func TestMatchHAS(t *testing.T) {
 		{`cmd HAS -f`, []string{"cmd", "-rf"}, "/usr/bin/cmd", true},                   // short bundle
 		{`cmd HAS -f`, []string{"cmd", "-r"}, "/usr/bin/cmd", false},
 		{`cmd HAS --force`, []string{"cmd", "-force"}, "/usr/bin/cmd", false}, // no bundle for long flag
+		// value-prefix: a flag spelled with '=' matches any token starting with it
+		{`tar HAS --checkpoint-action=exec`, []string{"tar", "cf", "x", "--checkpoint-action=exec=CMD"}, "/usr/bin/tar", true},
+		{`tar HAS --checkpoint-action=exec`, []string{"tar", "cf", "x", "--checkpoint-action=display=progress"}, "/usr/bin/tar", false},
+		{`tar HAS --checkpoint-action=exec`, []string{"tar", "cf", "x", "--checkpoint-action=exec"}, "/usr/bin/tar", true},
+		{`tar HAS --checkpoint-action=exec`, []string{"tar", "cf", "x", "--checkpoint-action=execute"}, "/usr/bin/tar", false},
+		{`cmd HAS --output=`, []string{"cmd", "--output=file"}, "/usr/bin/cmd", true},
+		{`cmd HAS --mode=safe`, []string{"cmd", "--mode=safety-off"}, "/usr/bin/cmd", false},
 	}
 	for _, tc := range cases {
 		if got := matchRule(tc.argv, tc.resolved, false, mkRule(t, tc.rule)); got != tc.want {
@@ -134,6 +141,7 @@ func FuzzMatch(f *testing.F) {
 	f.Add("git status ANY", "git status -s")
 	f.Add("git HAS --hard", "git reset --hard")
 	f.Add("ls", "ls -la")
+	f.Add("tar HAS --checkpoint-action=exec", "tar cf x --checkpoint-action=exec=CMD")
 	f.Fuzz(func(t *testing.T, ruleBody, cmd string) {
 		toks, err := parseRuleWords(ruleBody)
 		if err != nil {
