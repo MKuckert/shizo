@@ -80,8 +80,22 @@ deny git checkout .
 
 # no execution of arbitrary commands
 deny find HAS -exec
+deny find HAS -execdir
+deny find HAS -ok
+deny find HAS -okdir
 deny rg HAS --pre
 deny tar HAS --checkpoint-action
+deny tar HAS --to-command
+deny tar HAS --use-compress-program
+deny tar HAS -I
+
+# coreutils helper-program flags spawn an arbitrary child process
+deny sort HAS --compress-program
+deny gsort HAS --compress-program
+deny split HAS --filter
+deny gsplit HAS --filter
+deny install HAS --strip-program
+deny ginstall HAS --strip-program
 
 # no data exfiltration
 deny curl HAS -d
