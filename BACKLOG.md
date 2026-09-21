@@ -2,9 +2,6 @@
 
 ## CLI surface & adoption
 
-- [**install-hook**](plans/drafts/PLAN-install-claude-hook.md)
-  > Add `shizo install claude-hook` to add PreToolUse hook. Flags: `--project` for `.claude/settings.json`, `--local` for `.claude/settings.local.json`, `--global` for `~/.claude/settings.json`, defaults to `--project`.
-
 - [**info-command**](plans/drafts/PLAN-info-subcommand.md)
   > Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
 

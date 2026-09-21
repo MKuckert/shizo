@@ -60,7 +60,17 @@ make install                 # $HOME/.shizo
 make install PREFIX=/tmp/x   # alternate root
 ```
 
-Register the wrapper, not the binary, in `~/.claude/settings.json`:
+Register the wrapper, not the binary, with:
+
+```sh
+shizo install claude-hook            # <cwd>/.claude/settings.json
+shizo install claude-hook --local    # <cwd>/.claude/settings.local.json
+shizo install claude-hook --global   # ~/.claude/settings.json
+```
+
+The entry is merged into whatever the settings file already contains; a
+re-run is a no-op, and a file that is not valid JSON is refused rather than
+overwritten. The result is:
 
 ```json
 {

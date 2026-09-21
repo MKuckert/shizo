@@ -42,6 +42,7 @@ Commands:
   attest      record operator approval of a rule tier (required before it is trusted)
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
+  install     register the shizo.sh wrapper as a Claude Code PreToolUse hook
   help [cmd]  show this overview, or detailed usage for a command
               (aliases: --help, -h, -?)
   --version   print the version (alias: -v)
@@ -82,6 +83,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runTest(args[1:], stdin, stdout, stderr)
 		case "selfcheck":
 			return runSelfcheck(args[1:], stdout, stderr)
+		case "install":
+			return runInstall(args[1:], stdout, stderr)
 		default:
 			fmt.Fprintf(stderr, "shizo: unknown command %q\n\n%s\n", args[0], rootUsage)
 			return 2
@@ -107,6 +110,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = testUsage
 		case "selfcheck":
 			usage = selfcheckUsage
+		case "install":
+			usage = installUsage
 		}
 	}
 	fmt.Fprintln(stdout, usage)

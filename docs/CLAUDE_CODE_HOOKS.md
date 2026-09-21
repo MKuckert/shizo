@@ -2,7 +2,9 @@
 
 `shizo` implements Claude Code's `PreToolUse` contract for the `Bash`
 matcher. Register the installed `shizo.sh` wrapper rather than invoking the
-binary directly; the README contains the settings example.
+binary directly — `shizo install claude-hook` does this for you, merging the
+entry into an existing settings file; the README contains the resulting
+settings shape.
 
 ## Input
 
