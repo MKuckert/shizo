@@ -62,7 +62,7 @@ func lockdownAttestDir(t *testing.T, root string) {
 func runWith(t *testing.T, input string) (int, string) {
 	t.Helper()
 	var out bytes.Buffer
-	rc := runClaudeHook(strings.NewReader(input), &out)
+	rc := runHookPreToolUse(strings.NewReader(input), &out)
 	return rc, out.String()
 }
 
@@ -129,7 +129,7 @@ func TestRunHelp(t *testing.T) {
 		want string // a substring unique to the expected usage
 	}{
 		{nil, "usage: shizo [command]"},
-		{[]string{"claude-hook"}, "usage: shizo claude-hook"},
+		{[]string{"hook"}, "usage: shizo hook pretooluse"},
 		{[]string{"validate"}, "usage: shizo validate"},
 		{[]string{"test"}, "usage: shizo test"},
 		{[]string{"selfcheck"}, "usage: shizo selfcheck"},
@@ -167,15 +167,29 @@ func TestDispatchUnknownCommand(t *testing.T) {
 	}
 }
 
-// dispatch("claude-hook", ...) must behave exactly as arg-less run() did
+// dispatch("hook", "pretooluse", ...) must behave exactly as arg-less run() did
 // before this change: hook JSON on stdin -> a decision.
-func TestDispatchClaudeHook(t *testing.T) {
+func TestDispatchHookPreToolUse(t *testing.T) {
 	setupRun(t, "allow git status ANY\n")
 	var out, errb bytes.Buffer
 	stdin := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
-	rc := dispatch([]string{"claude-hook"}, stdin, &out, &errb)
+	rc := dispatch([]string{"hook", "pretooluse"}, stdin, &out, &errb)
 	if rc != 0 || decisionOf(t, out.String()) != "allow" {
-		t.Errorf("claude-hook allow: rc=%d out=%s", rc, out.String())
+		t.Errorf("hook pretooluse allow: rc=%d out=%s", rc, out.String())
+	}
+}
+
+// A missing or unknown hook event must exit 2 without reading stdin.
+func TestDispatchHookBadEvent(t *testing.T) {
+	for _, args := range [][]string{{"hook"}, {"hook", "bogus"}} {
+		var out, errb bytes.Buffer
+		rc := dispatch(args, failingReader{}, &out, &errb)
+		if rc != 2 || !strings.Contains(errb.String(), "supported event") {
+			t.Errorf("%v: rc=%d err=%q", args, rc, errb.String())
+		}
+		if strings.Contains(out.String(), "permissionDecision") {
+			t.Errorf("%v leaked a hook decision: %q", args, out.String())
+		}
 	}
 }
 

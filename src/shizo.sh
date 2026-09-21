@@ -19,7 +19,7 @@ fi
 
 input=$(cat)                                   # drain the hook JSON once
 [ -n "$SHIZO_DEBUG" ] && printf '%s\n' "$input" >>"$log/stdin.log" 2>/dev/null
-out=$(printf '%s' "$input" | "$dir/shizo" claude-hook 2>>"$log/shizo.log")
+out=$(printf '%s' "$input" | "$dir/shizo" hook pretooluse 2>>"$log/shizo.log")
 rc=$?
 
 case "$rc:$out" in

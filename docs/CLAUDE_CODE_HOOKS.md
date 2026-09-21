@@ -64,7 +64,7 @@ Exit 2 remains blocking even if Claude Code cannot parse the JSON body.
 ## Wrapper
 
 `shizo.sh` reads stdin once, checks that `$HOME/.shizo/logs` is writable,
-runs `shizo claude-hook`, and accepts only these combinations:
+runs `shizo hook pretooluse`, and accepts only these combinations:
 
 - exit 0 plus decision JSON: forward the JSON
 - exit 0 plus `defer`: emit nothing

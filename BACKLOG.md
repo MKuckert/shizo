@@ -2,10 +2,6 @@
 
 ## CLI surface & adoption
 
-- [**rename-hook**](plans/drafts/PLAN-rename-hook-pretooluse.md)
-  > Rename `shizo claude-hook` to `shizo hook pretooluse` to make it harness agnostic
-  - Must land **before** the install command, or fold both into one change.
-
 - [**install-hook**](plans/drafts/PLAN-install-claude-hook.md)
   > Add `shizo install claude-hook` to add PreToolUse hook. Flags: `--project` for `.claude/settings.json`, `--local` for `.claude/settings.local.json`, `--global` for `~/.claude/settings.json`, defaults to `--project`.
 

@@ -29,7 +29,7 @@ var version = "dev"
 // rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
 // It indexes the operator subcommands; each owns its own detailed usage const.
 const rootUsage = `shizo — a Claude Code PreToolUse hook that allowlists Bash
-commands at subcommand granularity. "claude-hook" is the hook entrypoint: it
+commands at subcommand granularity. "hook pretooluse" is the hook entrypoint: it
 reads hook JSON on stdin and emits a decision. Every other subcommand is
 operator-only and never touches the hook pipeline; with no arguments this
 prints usage and exits (it never reads stdin).
@@ -37,7 +37,7 @@ prints usage and exits (it never reads stdin).
 usage: shizo [command] [args]
 
 Commands:
-  claude-hook hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
+  hook <event> hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
   validate    lint rule files (all errors + semantic warnings)
   attest      record operator approval of a rule tier (required before it is trusted)
   test        dry-run a command through the evaluation pipeline
@@ -55,15 +55,20 @@ func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-// dispatch routes operator subcommands; "claude-hook" is the hook entrypoint
+// dispatch routes operator subcommands; "hook <event>" is the hook entrypoint
 // (what shizo.sh invokes). Arg-less prints usage and exits — it never reads
 // stdin. An unrecognised first arg is a mistyped subcommand, not hook input,
 // so it errors rather than blocking on stdin.
 func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
 		switch args[0] {
-		case "claude-hook":
-			return runClaudeHook(stdin, stdout)
+		case "hook":
+			// Unknown/missing event must never fall through to reading stdin.
+			if len(args) > 1 && args[1] == "pretooluse" {
+				return runHookPreToolUse(stdin, stdout)
+			}
+			fmt.Fprintf(stderr, "shizo: hook requires a supported event\n\n%s\n", hookUsage)
+			return 2
 		case "--version", "-v":
 			fmt.Fprintln(stdout, "shizo "+version)
 			return 0
@@ -92,8 +97,8 @@ func runHelp(args []string, stdout io.Writer) int {
 	usage := rootUsage
 	if len(args) > 0 {
 		switch args[0] {
-		case "claude-hook":
-			usage = claudeHookUsage
+		case "hook":
+			usage = hookUsage
 		case "validate":
 			usage = validateUsage
 		case "attest":
@@ -108,11 +113,14 @@ func runHelp(args []string, stdout io.Writer) int {
 	return 0
 }
 
-// claudeHookUsage documents the hook entrypoint invoked by shizo.sh. This is
+// hookUsage documents the hook entrypoint invoked by shizo.sh. This is
 // the only subcommand that reads stdin and logs decisions.
-const claudeHookUsage = `shizo claude-hook — the Claude Code PreToolUse hook entrypoint.
+const hookUsage = `shizo hook pretooluse — the PreToolUse hook entrypoint.
 
-usage: shizo claude-hook
+usage: shizo hook pretooluse
+
+Events:
+  pretooluse  the only supported event
 
 Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
 evaluates the command against the rule tiers, and emits a decision object on
@@ -133,7 +141,7 @@ func defaultHookRoot() string {
 	return filepath.Join(u.HomeDir, ".shizo")
 }
 
-func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
+func runHookPreToolUse(stdin io.Reader, stdout io.Writer) int {
 	raw, _ := io.ReadAll(stdin)
 	in, inErr := parseInput(raw)
 
