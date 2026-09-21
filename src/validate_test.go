@@ -112,6 +112,14 @@ func TestValidateShadow(t *testing.T) {
 	}
 }
 
+func TestValidateShadowedAsk(t *testing.T) {
+	body := "sandbox nono\ndeny git push ANY\nask git push --force\n"
+	fs := validateFile("rules", body, false)
+	if !hasMsg(fs, "ask rule is fully shadowed") {
+		t.Errorf("expected shadow warning for ask rule: %+v", fs)
+	}
+}
+
 func TestValidateIgnoredDirectiveProjectTier(t *testing.T) {
 	body := "trust /opt/x\nreturntype automode\ndeny rm ANY\n"
 	fs := validateFile(".shizo", body, true)

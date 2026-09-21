@@ -4,9 +4,6 @@
 
 Rule DSL cannot express the threat
 
-- [**ask-rule**](plans/drafts/PLAN-ask-rule.md)
-  > `ask` rule rework and refactoring
-
 - [**has-value-prefix**](plans/drafts/PLAN-has-value-prefix.md)
   > Add support to deny `tar --checkpoint-action=exec=CMD` with a rule `deny tar HAS --checkpoint-action=exec` or similar.
   - Stands alone as deny-only; wants `ask` for the softer verdict.

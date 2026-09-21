@@ -139,37 +139,35 @@ func runClaudeHook(stdin io.Reader, stdout io.Writer) int {
 
 	root := hookRootFn()
 	if root == "" {
-		emitDecision(stdout, outDeny, "cannot determine home directory for rules")
+		emitDecision(stdout, Outcome{kindDeny, "cannot determine home directory for rules"})
 		return 2
 	}
 	gPath := filepath.Join(root, "global", "rules")
 	cfg := loadConfig(gPath, projectRulesPathFor(in.Cwd), root)
 
 	var (
-		outcome     Outcome
-		reason      string
-		logs        []cmdLog
-		askExplicit bool
+		outcome Outcome
+		logs    []cmdLog
 	)
 	if inErr != "" {
-		outcome, reason = outDeny, inErr
+		outcome = Outcome{kindDeny, inErr}
 	} else {
-		outcome, reason, logs, askExplicit = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
+		outcome, logs = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
 	}
 
-	logDecision(in, outcome, reason, logs) // best effort; never changes the decision
+	logDecision(in, outcome, logs) // best effort; never changes the decision
 
-	switch outcome {
-	case outDeny:
-		emitDecision(stdout, outDeny, reason)
+	switch outcome.Kind {
+	case kindDeny:
+		emitDecision(stdout, outcome)
 		return 2
 	default: // allow / ask
 		// §2.1: defer only unmatched fallthrough, not explicit ask rules
-		if cfg.returnMode == "automode" && outcome == outAsk && !askExplicit {
+		if cfg.returnMode == "automode" && outcome.Kind == kindUndecided {
 			fmt.Fprint(stdout, "defer")
 			return 0
 		}
-		emitDecision(stdout, outcome, reason)
+		emitDecision(stdout, outcome)
 		return 0
 	}
 }
@@ -187,12 +185,12 @@ func parseInput(raw []byte) (hookInput, string) {
 	return in, ""
 }
 
-func emitDecision(w io.Writer, outcome Outcome, reason string) {
+func emitDecision(w io.Writer, outcome Outcome) {
 	obj := map[string]any{
 		"hookSpecificOutput": map[string]any{
 			"hookEventName":            "PreToolUse",
-			"permissionDecision":       string(outcome),
-			"permissionDecisionReason": reason,
+			"permissionDecision":       outcome.Kind.String(),
+			"permissionDecisionReason": outcome.Reason,
 		},
 	}
 	b, _ := json.Marshal(obj)
@@ -253,7 +251,7 @@ type logLine struct {
 	Reason    string   `json:"reason"`
 }
 
-func logDecision(in hookInput, outcome Outcome, reason string, cmds []cmdLog) {
+func logDecision(in hookInput, outcome Outcome, cmds []cmdLog) {
 	dir := logDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
@@ -266,8 +264,8 @@ func logDecision(in hookInput, outcome Outcome, reason string, cmds []cmdLog) {
 		SessionID: in.SessionID,
 		Command:   in.ToolInput.Command,
 		Commands:  cmds,
-		Decision:  string(outcome),
-		Reason:    reason,
+		Decision:  outcome.Kind.String(),
+		Reason:    outcome.Reason,
 	}
 	b, err := json.Marshal(ll)
 	if err != nil {

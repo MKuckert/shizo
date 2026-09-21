@@ -142,7 +142,7 @@ func validateFile(file, content string, project bool) []finding {
 			"global tier must declare a sandbox directive (nono or dangerously-none)"})
 	}
 	out = append(out, lintDeadRules(cfg, file, lineByRaw)...)
-	out = append(out, lintShadowedAllows(cfg, file, lineByRaw)...)
+	out = append(out, lintShadowedRules(cfg, file, lineByRaw)...)
 	out = append(out, lintIgnoredDirectives(cfg, file, lineByRaw)...)
 	out = append(out, lintTrustDirs(cfg, file, trustLine)...)
 	out = append(out, lintDeadStdinRules(cfg, file, lineByRaw)...)
@@ -183,20 +183,24 @@ func lintDeadRules(cfg *config, file string, lineOf map[string]int) []finding {
 	return out
 }
 
-// lintShadowedAllows flags allow rules fully overridden by a deny (deny wins,
+// lintShadowedRules flags allow/ask rules fully overridden by a deny (deny wins,
 // §4.1 precedence). Conservative and sound: only reports when every command the
-// allow could match is provably denied.
-func lintShadowedAllows(cfg *config, file string, lineOf map[string]int) []finding {
+// rule could match is provably denied.
+func lintShadowedRules(cfg *config, file string, lineOf map[string]int) []finding {
 	var out []finding
-	for _, a := range cfg.allowRules {
-		for _, d := range cfg.denyRules {
-			if denyShadowsAllow(a, d) {
-				out = append(out, finding{file, lineOf[a.raw], levelWarn,
-					fmt.Sprintf("allow rule is fully shadowed by deny rule %q (deny always wins): %s", d.raw, a.raw)})
-				break
+	check := func(action string, rules []rule) {
+		for _, a := range rules {
+			for _, d := range cfg.denyRules {
+				if denyShadowsAllow(a, d) {
+					out = append(out, finding{file, lineOf[a.raw], levelWarn,
+						fmt.Sprintf("%s rule is fully shadowed by deny rule %q (deny always wins): %s", action, d.raw, a.raw)})
+					break
+				}
 			}
 		}
 	}
+	check("allow", cfg.allowRules)
+	check("ask", cfg.askRules)
 	return out
 }
 

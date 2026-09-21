@@ -58,11 +58,12 @@ The implementation is split across `src/policy.go`, `src/extract.go`,
 Pipelines, lists, and substitutions may produce several commands. Each is
 evaluated independently, then folded with this precedence:
 
-> any `deny` -> `deny`; otherwise any `ask` -> `ask`; otherwise `allow`.
+> `deny` > explicit `ask` > unmatched > `allow` — the strongest result wins.
 
-Thus one denied pipeline stage denies the complete Bash invocation. Output mode
-may turn the final unmatched `ask` into an automode defer, but the log retains
-the actual policy result.
+Thus one denied pipeline stage denies the complete Bash invocation. The two
+middle levels both report `ask` on the wire and in the log; they differ only in
+automode, where an invocation that is merely unmatched defers while one matched
+by an explicit `ask` rule always asks.
 
 ## Logging
 

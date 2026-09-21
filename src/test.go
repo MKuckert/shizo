@@ -88,7 +88,7 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		env.sandboxed = true
 	}
 
-	outcome, reason, logs, _ := decide(command, *cwd, cfg, env)
+	outcome, logs := decide(command, *cwd, cfg, env)
 
 	if *asJSON {
 		if logs == nil {
@@ -98,30 +98,30 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			Ts:       time.Now().Format(time.RFC3339),
 			Command:  command,
 			Commands: logs,
-			Decision: string(outcome),
-			Reason:   reason,
+			Decision: outcome.Kind.String(),
+			Reason:   outcome.Reason,
 		}, "", "  ")
 		fmt.Fprintln(stdout, string(b))
 	} else {
-		renderTest(stdout, outcome, reason, logs)
+		renderTest(stdout, outcome, logs)
 	}
 
 	// Sandbox-gate-only denies are an operator footgun, not a real policy result.
-	if outcome == outDeny && !env.sandboxed && strings.HasPrefix(reason, "sandbox gate:") {
+	if outcome.Kind == kindDeny && !env.sandboxed && strings.HasPrefix(outcome.Reason, "sandbox gate:") {
 		fmt.Fprintln(stderr, "hint: this deny is the sandbox gate; re-run with --assume-sandboxed to exercise the rules")
 	}
 
-	if outcome == outDeny {
+	if outcome.Kind == kindDeny {
 		return 2
 	}
 	return 0
 }
 
 // renderTest prints the decision, reason, and a per-command breakdown.
-func renderTest(w io.Writer, outcome Outcome, reason string, logs []cmdLog) {
+func renderTest(w io.Writer, outcome Outcome, logs []cmdLog) {
 	col := newColorer(w)
-	fmt.Fprintf(w, "decision: %s\n", colorDecision(col, string(outcome)))
-	fmt.Fprintf(w, "reason:   %s\n", reason)
+	fmt.Fprintf(w, "decision: %s\n", colorDecision(col, outcome.Kind.String()))
+	fmt.Fprintf(w, "reason:   %s\n", outcome.Reason)
 	if len(logs) == 0 {
 		return
 	}
