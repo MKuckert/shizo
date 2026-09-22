@@ -11,3 +11,6 @@ Required Scopes for a Personal Access Token (PAT) to use goreleaser with the Git
 - Release: Create
 - Markdown Upload: Create
 - Release Link: Create
+
+Optional additional Scopes
+- Project: Read

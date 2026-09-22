@@ -38,11 +38,31 @@ checksum:
   algorithm: sha256
 
 changelog:
+  use: git
+  sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
+      - '^.*?docs(\([[:word:]]+\))??!?:'
+      - '^.*?test(\([[:word:]]+\))??!?:'
+      - '^.*?ci(\([[:word:]]+\))??!?:'
+      - '^.*?chore(\([[:word:]]+\))??!?:'
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Refactors
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
 
 release:
   gitlab:
