@@ -40,8 +40,8 @@ func TestMatchANY(t *testing.T) {
 		{`ls ANY`, []string{"ls", "-la"}, "/usr/bin/ls", true}, // n tokens
 		{`git status ANY`, []string{"git", "status"}, "/usr/bin/git", true},
 		{`git status ANY`, []string{"git", "log"}, "/usr/bin/git", false},
-		{`ANY status`, []string{"git", "status"}, "/usr/bin/git", true},                   // ANY at head
-		{`ANY status`, []string{"status"}, "/usr/bin/status", true},                       // head zero
+		{`ANY status`, []string{"git", "status"}, "/usr/bin/git", true},                    // ANY at head
+		{`ANY status`, []string{"status"}, "/usr/bin/status", true},                        // head zero
 		{`ddev ANY phpunit`, []string{"ddev", "x", "y", "phpunit"}, "/usr/bin/ddev", true}, // ANY in middle
 		{`ddev ANY phpunit`, []string{"ddev", "phpunit"}, "/usr/bin/ddev", true},           // middle zero
 		{`ddev ANY phpunit`, []string{"ddev", "phpunit", "x"}, "/usr/bin/ddev", false},     // tail mismatch

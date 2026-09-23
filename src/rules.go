@@ -355,7 +355,7 @@ func parseRuleWords(line string) ([]ruleToken, error) {
 			toks = append(toks, ruleToken{kind: kw})
 			continue
 		}
-		text, kind := resolveWord(w)
+		text, kind := resolveWord(w, true)
 		if kind != kindLiteral {
 			return nil, fmt.Errorf("non-literal token in rule")
 		}

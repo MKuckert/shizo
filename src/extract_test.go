@@ -36,7 +36,7 @@ func TestExtractionCorpus(t *testing.T) {
 		{`a=1 git status`, [][]string{{"git", "status"}}},
 		{`git log --output=/tmp/x`, [][]string{{"git", "log", "--output=/tmp/x"}}},
 		{`ssh -o ProxyCommand=evil host`, [][]string{{"ssh", "-o", "ProxyCommand=evil", "host"}}},
-		{`find . -exec rm {} \;`, [][]string{{"find", ".", "-exec", "rm", "{}", `\;`}}},
+		{`find . -exec rm {} \;`, [][]string{{"find", ".", "-exec", "rm", "{}", `;`}}},
 		{`xargs rm < list`, [][]string{{"xargs", "rm"}}},
 		{`git status > /etc/passwd`, [][]string{{"git", "status"}}},
 		{`\g\i\t status`, [][]string{{`\g\i\t`, "status"}}}, // not de-escaped; denies at resolution
@@ -139,8 +139,9 @@ func TestRedirectClassification(t *testing.T) {
 	}
 }
 
-// The parser does NOT de-escape \g\i\t (unlike bashlex). Under fail-closed the
-// raw token faces path resolution and simply fails to resolve, so it denies.
+// argv[0] keeps its backslashes (unlike bashlex): the raw token faces path
+// resolution, fails to resolve, and denies. Arguments are de-escaped instead,
+// so a deny rule cannot be dodged by spelling the flag `--ha\rd`.
 func TestBackslashNotDeEscaped(t *testing.T) {
 	f, _ := parse(t, `\g\i\t status`)
 	got := argvs(extract(f))
@@ -151,8 +152,8 @@ func TestBackslashNotDeEscaped(t *testing.T) {
 
 func TestStdinFed(t *testing.T) {
 	cases := []struct {
-		src      string
-		wantFed  []bool // per-command stdinFed
+		src     string
+		wantFed []bool // per-command stdinFed
 	}{
 		// pipe RHS is stdin-fed
 		{`git log | grep foo`, []bool{false, true}},
@@ -226,5 +227,27 @@ func TestUnclosedQuote(t *testing.T) {
 	_, err := parse(t, `git commit -m "unclosed`)
 	if err == nil {
 		t.Error("expected parse error for unclosed quote")
+	}
+}
+
+func TestUnescapeLit(t *testing.T) {
+	cases := []struct {
+		in       string
+		inDquote bool
+		want     string
+	}{
+		{`--hard`, false, `--hard`},
+		{`--ha\rd`, false, `--hard`},
+		{`\;`, false, `;`},
+		{`a\\b`, false, `a\b`},
+		{"a\\\nb", false, "ab"}, // line continuation
+		{`\$x`, true, `$x`},     // special inside dquotes
+		{`\n`, true, `\n`},      // not special inside dquotes
+		{`trailing\`, false, `trailing\`},
+	}
+	for _, tc := range cases {
+		if got := unescapeLit(tc.in, tc.inDquote); got != tc.want {
+			t.Errorf("unescapeLit(%q, %v) = %q want %q", tc.in, tc.inDquote, got, tc.want)
+		}
 	}
 }

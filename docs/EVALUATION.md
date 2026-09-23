@@ -22,9 +22,12 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
    simple `CallExpr`, the entire invocation is denied because the receiving
    command is not statically identifiable.
 6. **Resolve words.** Literals, single-quoted words, and fully literal
-   double-quoted words become argv tokens. Command and process substitutions
-   become `<subst>` in the outer argv while their contents are checked
-   independently.
+   double-quoted words become argv tokens. Backslash escapes are removed from
+   arguments and from rule tokens, so `--ha\rd` and `--hard` are the same token
+   and a `HAS` rule cannot be dodged by respelling the flag; `argv[0]` keeps its
+   backslashes so `\g\i\t` faces path resolution as written and fails to
+   resolve. Command and process substitutions become `<subst>` in the outer argv
+   while their contents are checked independently.
 7. **Reject dynamic argv.** Parameter and arithmetic expansions deny because
    their values are unknown during policy evaluation.
 8. **Reject assignments.** Assignment prefixes and bare assignments deny; they

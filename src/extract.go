@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -33,11 +35,11 @@ func displayArgv(argv []string) []string {
 
 // extractedCmd is one simple command (CallExpr) found anywhere in the tree.
 type extractedCmd struct {
-	argv           []string // resolved tokens; opaque->substToken, unresolvable->varToken
-	unresolvable   bool     // §2 step 7: ParamExp/ArithmExp in an argv word
-	hasAssign      bool     // §2 step 8: assignment prefix or bare assignment
-	stdinFed       bool     // stdin redirect (<, <<, <<<, <>) or pipe RHS
-	stdinCompound  bool     // pipe/redirect feeds a compound (non-CallExpr) sink
+	argv          []string // resolved tokens; opaque->substToken, unresolvable->varToken
+	unresolvable  bool     // §2 step 7: ParamExp/ArithmExp in an argv word
+	hasAssign     bool     // §2 step 8: assignment prefix or bare assignment
+	stdinFed      bool     // stdin redirect (<, <<, <<<, <>) or pipe RHS
+	stdinCompound bool     // pipe/redirect feeds a compound (non-CallExpr) sink
 }
 
 // writeRedirect is a write-target redirection collected for containment (§2 step 12).
@@ -98,8 +100,10 @@ func buildCmd(c *syntax.CallExpr, stdinSet, compoundSink map[*syntax.CallExpr]bo
 		stdinFed:      stdinSet[c],
 		stdinCompound: compoundSink[c],
 	}
-	for _, w := range c.Args {
-		text, kind := resolveWord(w)
+	for i, w := range c.Args {
+		// argv[0] keeps its backslashes so `\g\i\t` still fails to resolve
+		// and denies; arguments are de-escaped so deny rules see real tokens.
+		text, kind := resolveWord(w, i > 0)
 		switch kind {
 		case kindUnresolvable:
 			cmd.unresolvable = true
@@ -152,7 +156,7 @@ func classifyRedirect(r *syntax.Redirect) (writeRedirect, bool) {
 	if !isWriteOp(r.Op) {
 		return writeRedirect{}, false
 	}
-	text, kind := resolveWord(r.Word)
+	text, kind := resolveWord(r.Word, true)
 	if kind != kindLiteral {
 		// ParamExp/CmdSubst target: cannot verify containment -> deny.
 		return writeRedirect{unverifiable: true}, true
@@ -189,21 +193,56 @@ func maxKind(a, b wordKind) wordKind {
 
 // resolveWord flattens a Word to literal text (§2 step 6), reporting how
 // resolvable it is. Unresolvable dominates opaque dominates literal.
-func resolveWord(w *syntax.Word) (string, wordKind) {
+func resolveWord(w *syntax.Word, unescape bool) (string, wordKind) {
 	var text string
 	kind := kindLiteral
 	for _, p := range w.Parts {
-		t, k := resolvePart(p)
+		t, k := resolvePart(p, unescape, false)
 		text += t
 		kind = maxKind(kind, k)
 	}
 	return text, kind
 }
 
-func resolvePart(p syntax.WordPart) (string, wordKind) {
+// unescapeLit applies shell backslash removal to a Lit value so that argv
+// tokens match what the shell will actually pass (§2 step 6). Without this a
+// deny rule is evadable by spelling the flag `--ha\rd`. Unquoted, a backslash
+// preserves the next character literally; inside double quotes it is special
+// only before $ ` " \ and newline. A trailing backslash-newline is a line
+// continuation and disappears in both contexts.
+func unescapeLit(s string, inDquote bool) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		next := s[i+1]
+		if next == '\n' { // line continuation: both bytes vanish
+			i++
+			continue
+		}
+		if inDquote && !strings.ContainsRune("$`\"\\", rune(next)) {
+			b.WriteByte(s[i]) // backslash is literal here
+			continue
+		}
+		b.WriteByte(next)
+		i++
+	}
+	return b.String()
+}
+
+func resolvePart(p syntax.WordPart, unescape, inDquote bool) (string, wordKind) {
 	switch x := p.(type) {
 	case *syntax.Lit:
-		return x.Value, kindLiteral
+		if !unescape {
+			return x.Value, kindLiteral
+		}
+		return unescapeLit(x.Value, inDquote), kindLiteral
 	case *syntax.SglQuoted:
 		return x.Value, kindLiteral
 	case *syntax.DblQuoted:
@@ -211,7 +250,7 @@ func resolvePart(p syntax.WordPart) (string, wordKind) {
 		var text string
 		kind := kindLiteral
 		for _, ip := range x.Parts {
-			t, k := resolvePart(ip)
+			t, k := resolvePart(ip, unescape, true)
 			text += t
 			kind = maxKind(kind, k)
 		}

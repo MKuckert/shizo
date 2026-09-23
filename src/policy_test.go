@@ -341,3 +341,31 @@ func TestEscalate(t *testing.T) {
 		}
 	}
 }
+
+// Argv matching happens after the shell parse, so quoting and escaping that a
+// text-level pattern would read as distinct strings collapse to the same token
+// and still hit `deny git reset HAS --hard` (see docs/EVALUATION.md §2).
+func TestPolicyFlagSpellings(t *testing.T) {
+	cfg, env, _ := policyFixture(t, "deny git reset HAS --hard\n")
+	cwd := t.TempDir()
+
+	cases := []struct {
+		cmd  string
+		want OutcomeKind
+	}{
+		{`git reset --hard HEAD~1`, kindDeny},
+		{`git reset HEAD~1 --hard`, kindDeny},   // flag position is irrelevant
+		{`git reset --ha''rd HEAD~1`, kindDeny}, // empty single-quote split
+		{`git reset --ha""rd HEAD~1`, kindDeny}, // empty double-quote split
+		{`git reset "--hard" HEAD~1`, kindDeny}, // fully quoted
+		{`git reset --ha\rd HEAD~1`, kindDeny},  // backslash escape
+		{`git reset $FLAG HEAD~1`, kindDeny},    // unexpandable word, denied outright
+		{`git reset --soft HEAD~1`, kindUndecided},
+	}
+	for _, tc := range cases {
+		got, _ := decide(tc.cmd, cwd, cfg, env)
+		if got.Kind != tc.want {
+			t.Errorf("%q: got %s (%s) want %v", tc.cmd, got.Kind, got.Reason, tc.want)
+		}
+	}
+}

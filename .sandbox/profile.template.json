@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude", "nolabs-ai/opencode"],
   "meta": {
     "name": "shizo-claude",
-    "version": "7"
+    "version": "8"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -77,6 +77,7 @@
       "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
       "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
       "CLAUDE_CODE_THRIFTY_SONIC": "0",
+      "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION": "0",
       "DISABLE_AUTO_COMPACT": "1",
       "DISABLE_FEEDBACK_COMMAND": "1",
       "DISABLE_INSTALL_GITHUB_APP_COMMAND": "1",
