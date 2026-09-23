@@ -101,7 +101,7 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 	// inside the sandbox — outside it (tests, operator commands) everything
 	// is writable regardless of the profile.
 	if os.Getenv("NONO_CAP_FILE") != "" {
-		attestDir := filepath.Join(root, "attestations")
+		attestDir := attestDirIn(root)
 		if ok, detail := probeStoreReadOnly(attestDir); !ok {
 			return "attestation store is writable in-sandbox: " + detail +
 				" — records are forgeable, re-check the sandbox profile"

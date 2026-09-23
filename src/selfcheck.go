@@ -84,7 +84,7 @@ func runSelfcheck(args []string, stdout, stderr io.Writer) int {
 func selfcheckResults(root string) []checkResult {
 	globalDir := filepath.Join(root, "global")
 	globalRules := filepath.Join(globalDir, "rules")
-	engineDir := filepath.Join(root, "engine")
+	engineDir := engineDirIn(root)
 	logs := logDir()
 
 	var out []checkResult
@@ -114,7 +114,7 @@ func selfcheckResults(root string) []checkResult {
 	writable, detail = probeDirWrite(engineDir)
 	out = append(out, checkResult{"engine/ not writable", !writable, detail})
 
-	attestDir := filepath.Join(root, "attestations")
+	attestDir := attestDirIn(root)
 	storeOK, detail := probeStoreReadOnly(attestDir)
 	out = append(out, checkResult{"attestations/ not writable", storeOK, detail})
 

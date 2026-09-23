@@ -133,9 +133,9 @@ Use `shizo help`, `help <command>`, or `<command> --help` for command help.
 ### Validate rules
 
 ```sh
-dist/shizo validate                 # resolved global and cwd project tiers
-dist/shizo validate FILE...         # files treated as a global tier
-dist/shizo validate --project FILE  # file treated as a project tier
+shizo validate                 # resolved global and cwd project tiers
+shizo validate FILE...         # files treated as a global tier
+shizo validate --project FILE  # file treated as a project tier
 ```
 
 `validate` reports all syntax errors and semantic warnings. Its output is
@@ -148,8 +148,8 @@ missing trust directories, and ignored project directives.
 After reviewing and validating a tier, approve it outside the sandbox:
 
 ```sh
-dist/shizo attest --global   # resolved global tier and trusted PATH snapshot
-dist/shizo attest [FILE]     # project tier; defaults to <cwd>/.shizo
+shizo attest --global   # resolved global tier and trusted PATH snapshot
+shizo attest [FILE]     # project tier; defaults to <cwd>/.shizo
 ```
 
 The hook denies everything if a present tier lacks a matching attestation or if
@@ -159,10 +159,10 @@ excluded from the hash. A fresh install attests its starter global rules.
 ### Test a decision
 
 ```sh
-dist/shizo test 'git status'
-dist/shizo test --cwd /path/to/repo 'git status'
+shizo test 'git status'
+shizo test --cwd /path/to/repo 'git status'
 echo 'git push' | dist/shizo test
-dist/shizo test --stdin-json < hook.json
+shizo test --stdin-json < hook.json
 ```
 
 `test` runs the hook policy without logging or hook JSON. It exits 2 for deny
@@ -174,13 +174,24 @@ the sandbox-presence check. `--json` prints the log-record shape.
 Run the syscall-based checks from inside the sandbox:
 
 ```sh
-dist/shizo selfcheck
-dist/shizo selfcheck --json
-dist/shizo selfcheck --root DIR
+shizo selfcheck
+shizo selfcheck --json
+shizo selfcheck --root DIR
 ```
 
 The check verifies that the engine, rules, and attestations cannot be written
 and that logs can. It does not rely on file mode bits or modify the rules.
+
+### Resolved paths
+
+```sh
+shizo info                      # key<TAB>value per entry
+shizo info --global-rules-path  # bare value, for scripts
+shizo info --cwd DIR --project-rules-path
+```
+
+`info` prints where this install resolves its rules, attestations, logs, engine,
+and hook command, so scripts and troubleshooting need not hardcode `~/.shizo`.
 
 ## Operations and recovery
 

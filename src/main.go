@@ -43,6 +43,7 @@ Commands:
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
   install     register the shizo.sh wrapper as a Claude Code PreToolUse hook
+  info        print the paths shizo resolves (rules, logs, engine, hook command)
   help [cmd]  show this overview, or detailed usage for a command
               (aliases: --help, -h, -?)
   --version   print the version (alias: -v)
@@ -85,6 +86,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runSelfcheck(args[1:], stdout, stderr)
 		case "install":
 			return runInstall(args[1:], stdout, stderr)
+		case "info":
+			return runInfo(args[1:], stdout, stderr)
 		default:
 			fmt.Fprintf(stderr, "shizo: unknown command %q\n\n%s\n", args[0], rootUsage)
 			return 2
@@ -112,6 +115,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = selfcheckUsage
 		case "install":
 			usage = installUsage
+		case "info":
+			usage = infoUsage
 		}
 	}
 	fmt.Fprintln(stdout, usage)
@@ -233,6 +238,12 @@ func installRoot() string {
 }
 
 func globalRulesPath() string { return filepath.Join(installRoot(), "global", "rules") }
+
+// attestDirIn is where a tier's .attest records live under an install root.
+func attestDirIn(root string) string { return filepath.Join(root, "attestations") }
+
+// engineDirIn is where the binary + shizo.sh wrapper are installed.
+func engineDirIn(root string) string { return filepath.Join(root, "engine") }
 
 func projectRulesPathFor(cwd string) string {
 	if cwd == "" {

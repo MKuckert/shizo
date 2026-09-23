@@ -28,7 +28,9 @@ make install PREFIX=/tmp/x   # install elsewhere for verification
 ```
 
 `shizo help` prints a subcommand overview; `help <cmd>` (or `<cmd> --help`)
-prints that command's usage.
+prints that command's usage. `shizo info` prints the paths this install
+resolves — one `key<TAB>value` line per entry, or a single bare value with
+`--<key>` (`rules=$(shizo info --global-rules-path)`).
 
 Lint rule files before installing them:
 
@@ -68,6 +70,7 @@ Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 | `extract.go`    | argv extraction from the parsed AST; `<subst>`/`<var>` tokens |
 | `resolve.go`    | command resolution: safe builtins, uncond-deny, PATH lookup |
 | `validate.go`   | `shizo validate` — operator-only rule linter (all errors + semantic warnings) |
+| `info.go`       | `shizo info` — operator-only; prints the install's resolved paths |
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
 | `shizo.sh`       | wrapper installed as the hook `command`; fails closed      |

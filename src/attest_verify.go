@@ -159,11 +159,11 @@ func parseAttestFields(content string) map[string]string {
 // globalAttestPath and projectAttestPath locate a tier's record under the
 // attestation store (plan: "one file per project ... plus global.attest").
 func globalAttestPath(root string) string {
-	return filepath.Join(root, "attestations", "global.attest")
+	return filepath.Join(attestDirIn(root), "global.attest")
 }
 
 func projectAttestPath(root, absRulesPath string) string {
 	sum := sha256.Sum256([]byte(absRulesPath))
 	base := filepath.Base(filepath.Dir(absRulesPath))
-	return filepath.Join(root, "attestations", fmt.Sprintf("%x-%s.attest", sum, base))
+	return filepath.Join(attestDirIn(root), fmt.Sprintf("%x-%s.attest", sum, base))
 }

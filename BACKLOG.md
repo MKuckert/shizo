@@ -2,9 +2,6 @@
 
 ## CLI surface & adoption
 
-- [**info-command**](plans/drafts/PLAN-info-subcommand.md)
-  > Add `shizo info` command to retrieve information like `--global-rules-path` or `--attestation-dir`.
-
 - [**project-trust**](plans/drafts/PLAN-project-trust.md)
   > Allow `trust` in project config to add project-specific binaries
 
