@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude", "nolabs-ai/opencode"],
   "meta": {
     "name": "shizo-claude",
-    "version": "8"
+    "version": "10"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -16,7 +16,6 @@
       "~/.npm",
       "~/.go",
       "~/.shizo/logs",
-      "~/repos/bash-gate",
       "~/repos/shizo"
     ],
     "deny": ["~/.gitconfig"],
@@ -82,7 +81,6 @@
       "DISABLE_FEEDBACK_COMMAND": "1",
       "DISABLE_INSTALL_GITHUB_APP_COMMAND": "1",
       "DISABLE_UPGRADE_COMMAND": "1",
-      "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-6",
       "OPENCODE_ENABLE_EXA": "1",
       "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS": "1",
       "DO_NOT_TRACK": "1",
