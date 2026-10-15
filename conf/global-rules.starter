@@ -40,6 +40,7 @@ allow git diff ANY
 allow git show ANY
 allow git branch ANY
 allow git fetch ANY
+allow git rev-parse ANY
 # allow config reads and let setting configs fall-through to the operator
 allow git config --get ANY
 allow git config --get-regexp ANY
@@ -48,6 +49,13 @@ allow git config --list ANY
 allow ls ANY
 allow cat ANY
 allow rg ANY
+
+allow nono why ANY
+allow nono profile schema
+allow nono profile guide
+allow nono profile list
+allow nono profile show ANY
+allow nono profile validate ANY
 
 # deny piped interpreters — STDIN restricts a rule to stdin-fed commands only
 # deny STDIN python3 ANY

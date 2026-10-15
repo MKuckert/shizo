@@ -10,8 +10,8 @@ the constraints behind it.
 The design depends on two deployment properties:
 
 - The agent runs inside an OS sandbox, normally `nono`. The sandbox protects the
-  engine, global rules, and attestations from writes while limiting filesystem
-  and network reach. `shizo` supplements that boundary; it does not replace
+  engine, global rules, attestations, and the workspace files that decide what
+  runs next from writes while limiting filesystem and network reach. `shizo` supplements that boundary; it does not replace
   it. `sandbox nono` checks `NONO_CAP_FILE` to prevent accidental unconfined use.
 - Known-safe commands should run without prompts, known-dangerous commands
   should stop, and unfamiliar but statically valid commands should retain a
@@ -38,15 +38,22 @@ revisited if either behavior changes.
 | Policy tiers           | Required global tier plus optional cwd project tier                                | Repositories can add policy, but a global deny remains absolute                    |
 | Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only                               | A project cannot alter the execution boundary or output mode                       |
 | Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
-| Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | Writable Claude configuration cannot replace the gate                              |
+| Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | The agent cannot replace the gate; its registration is protected by the profile    |
 | Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
 | Automode               | Defer only unmatched results; explicit ask rules emit `ask`                        | Explicit allow, deny, and ask policy remains authoritative                         |
 | Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
 
-Self-protection belongs to the sandbox profile, not to Bash policy.
+Self-protection belongs to the sandbox profile, not to Bash policy. Beyond
+`$HOME/.shizo`, that includes every workspace file that decides what later
+executes: `.git` (whose config can name an fsmonitor or pager command run by an
+auto-allowed `git status`), the `.claude` directory holding the hook
+registration, the project `.shizo` tier, and launcher scripts run outside the
+sandbox. Because `nono` cannot downgrade part of a read/write grant to
+read-only, the profile grants read on the workspace and read/write only on
+named source directories and files.
 [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) documents
-the intended grants, and `shizo selfcheck` probes their effective syscall
-behavior from inside the sandbox.
+the intended grants, and `shizo selfcheck` probes the `$HOME/.shizo` grants'
+effective syscall behavior from inside the sandbox.
 
 ## Parser choice
 
@@ -95,6 +102,10 @@ that can edit both policy and records makes verification meaningless.
   machine for every present project tier. Root (`euid == 0`) bypasses POSIX
   file permissions, so `sandbox nono` explicitly rejects root to maintain this
   invariant; `dangerously-none` is required for root environments.
+- Write containment admits any redirect below `cwd`, so an allowed `echo` can
+  rewrite `.git/config` or `.claude/settings.json` unless the sandbox keeps them
+  read-only. A writable workspace turns auto-allowed `git` subcommands into
+  arbitrary execution and lets the agent unregister the hook.
 - `automode` delegates unmatched commands to Claude Code's classifier, so its
   treatment of unknown commands replaces the guaranteed prompt.
 - Rejecting assignments and dynamic argv blocks legitimate forms such as

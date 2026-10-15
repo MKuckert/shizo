@@ -1,20 +1,26 @@
 {
   "meta": {
     "name": "shizo-example",
-    "version": "1",
+    "version": "2",
     "description": "Deployment example for wrapping a shizo-gated agent. See README.md#example-sandbox-profile before use."
   },
   "workdir": {
-    "access": "readwrite"
+    "access": "read"
   },
   "filesystem": {
     "read": [
       "~/.shizo",
       "~/.shizo/attestations",
       "~/.shizo/engine",
-      "~/.shizo/global"
+      "~/.shizo/global",
+      "<AGENT_WORKDIR>"
     ],
-    "allow": ["~/.shizo/logs", "<AGENT_WORKDIR>"]
+    "allow": [
+      "~/.shizo/logs",
+      "<AGENT_WORKDIR>/src",
+      "<AGENT_WORKDIR>/docs"
+    ],
+    "allow_file": ["<AGENT_WORKDIR>/README.md"]
   },
   "network": {
     "block": true

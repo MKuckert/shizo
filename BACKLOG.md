@@ -25,5 +25,8 @@
 - pro: no variables, no functions
 - scan all binaries and classify
 - add `default ask|allow|deny`?
-- harden sandbox template (git read-only)
+- `selfcheck`: optionally probe that the workspace's execution-controlling paths
+  (`.git/config`, `.git/hooks`, `.claude/settings.json`, `.shizo`) are not
+  writable from inside the sandbox — warn, not fail, as layouts vary
+  (see README#example-sandbox-profile)
 - make bash builtin allowlist configurable?

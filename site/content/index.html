@@ -211,7 +211,7 @@ rm -f /tmp/generated-assets.tgz</code></pre>
         <h2>Why not just Claude Code permissions?</h2>
         <p class="fatigue-intro">
             Native permission rules match the command <em>text</em>.
-            <code>shizo</code> matches the command that actually runs. Five
+            <code>shizo</code> matches the command that actually runs. Six
             differences that change the outcome.
         </p>
 
@@ -295,6 +295,26 @@ git reset $FLAG HEAD~1
 
 <span class="c"># text glob sees four different strings</span>
 <span class="d">deny</span> git reset HAS --hard   <span class="c"># shizo parses first, then matches</span></code></pre>
+        </div>
+
+        <div class="vs-item">
+            <h3>6. The workspace can't rewrite the gate</h3>
+            <p>
+                An allowed command is only as safe as the files it reads.
+                Append an <code>fsmonitor</code> to <code>.git/config</code> and
+                the next harmless <code>git status</code> runs it; rewrite
+                <code>.claude/settings.json</code> and the permissions are gone.
+                No command rule can see that coming. <code>shizo</code> is
+                built to run inside a <code>nono</code> profile that keeps
+                <code>.git</code>, <code>.claude</code> and its own rules
+                read-only, and it denies everything outside a sandbox.
+            </p>
+            <pre class="code-block"><code><span class="c"># one allowed echo, one allowed git status</span>
+echo '[core] fsmonitor = ./payload' &gt;&gt; .git/config
+git status
+<span class="c"># native Bash(echo:*), Bash(git status:*) -> payload runs</span>
+<span class="c"># shizo + nono profile: workspace read-only</span>
+<span class="d">Operation not permitted</span></code></pre>
         </div>
     </div>
 </section>

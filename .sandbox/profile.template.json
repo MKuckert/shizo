@@ -3,20 +3,34 @@
   "extends": ["nolabs-ai/claude", "nolabs-ai/opencode"],
   "meta": {
     "name": "shizo-claude",
-    "version": "10"
+    "version": "11"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
   },
   "workdir": {
-    "access": "readwrite"
+    "access": "read"
   },
   "filesystem": {
     "allow": [
       "~/.npm",
       "~/.go",
       "~/.shizo/logs",
-      "~/repos/shizo"
+      "$WORKDIR/cmd",
+      "$WORKDIR/conf",
+      "$WORKDIR/dist",
+      "$WORKDIR/docs",
+      "$WORKDIR/plans",
+      "$WORKDIR/public",
+      "$WORKDIR/site",
+      "$WORKDIR/src",
+      "$WORKDIR/tools"
+    ],
+    "allow_file": [
+      "$WORKDIR/BACKLOG.md",
+      "$WORKDIR/CLAUDE.md",
+      "$WORKDIR/Makefile",
+      "$WORKDIR/README.md"
     ],
     "deny": ["~/.gitconfig"],
     "read_file": [
@@ -29,6 +43,7 @@
       "/opt/homebrew/bin/go"
     ],
     "read": [
+      "~/repos/shizo",
       "~/.CFUserTextEncoding",
       "~/.shizo",
       "~/.shizo/attestations",

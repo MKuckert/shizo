@@ -85,16 +85,6 @@ overwritten. The result is:
 
 The sandbox must grant read-only access to `$HOME/.shizo` and write access
 to its `logs` directory. Without these grants, the hook denies every command.
-[`conf/nono-profile.example.json`](conf/nono-profile.example.json) is a portable
-`nono` profile template; replace `<AGENT_WORKDIR>` before use. It grants:
-
-| Path or capability | Access |
-| --- | --- |
-| `~/.shizo` | read |
-| `~/.shizo/logs`, `<AGENT_WORKDIR>` | read/write |
-| network | denied by default |
-| environment | explicit variables only |
-
 The installed layout is:
 
 | Path | Access | Purpose |
@@ -103,11 +93,45 @@ The installed layout is:
 | `$HOME/.shizo/global/rules` | read-only | required global policy |
 | `$HOME/.shizo/attestations/` | read-only | approved rule hashes |
 | `$HOME/.shizo/logs/` | writable | daily decision logs |
-| `<cwd>/.shizo` | workspace | optional project policy |
+| `<cwd>/.shizo` | read-only | optional project policy |
 
 `$SHIZO_DIR` selects another install root for operator commands. Hook mode
 uses the account home directory instead, preventing environment-based policy
 redirection. Logs always remain below `$HOME`.
+
+### Example sandbox profile
+
+[`conf/nono-profile.example.json`](conf/nono-profile.example.json) is a portable
+`nono` profile template; replace `<AGENT_WORKDIR>` and the writable
+subdirectories with your project's layout before use. It grants:
+
+| Path or capability | Access |
+| --- | --- |
+| `~/.shizo`, `<AGENT_WORKDIR>` | read |
+| `~/.shizo/logs`, named source directories and files | read/write |
+| network | denied by default |
+| environment | explicit variables only |
+
+The working directory itself stays read-only. shizo lets an allowed command
+redirect output anywhere below `cwd`, so a writable workspace would let the
+agent rewrite the files that decide what runs next: `.git/config` (a
+`core.fsmonitor` or `core.pager` command executes on the next auto-allowed
+`git status` or `git log`), `.claude/settings.json` (the hook registration
+itself), the project `.shizo` tier, and any launcher scripts run outside the
+sandbox. Keeping these read-only is the sandbox's job, not the rules'.
+
+`nono` cannot carve a read-only path out of a read/write grant: a nested
+`read` does not override a broader `allow`, and `deny` also blocks the reads
+git, Claude Code, and shizo need. The profile therefore grants read on the
+workspace and read/write on each source directory (`allow`) and top-level file
+(`allow_file`) the agent edits. New top-level entries stay read-only until
+added to the profile, and git writes (`add`, `commit`, `worktree add`) happen
+outside the sandbox. Confirm the result from inside it:
+
+```sh
+nono why --self --path .git/config --op write   # DENIED
+nono why --self --path src --op write           # ALLOWED
+```
 
 ## Claude Code Automode
 

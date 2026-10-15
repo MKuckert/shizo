@@ -141,12 +141,15 @@ Details: `docs/RULES.md`.
 ## Task: Sandbox setup (nono)
 
 1. Copy `conf/nono-profile.example.json` to your nono profile location.
-2. Replace `<AGENT_WORKDIR>` with the actual agent working directory.
+2. Replace `<AGENT_WORKDIR>` with the agent working directory, and the
+   example's writable `src`, `docs`, and `README.md` with your project's
+   source directories and top-level files.
 3. The profile grants:
-   - read: `~/.shizo` (engine, rules, attestations)
-   - read/write: `~/.shizo/logs`, `<AGENT_WORKDIR>`
-   - network: denied
-   - environment: explicit variables only (`HOME`, `PATH`, `SHELL`, `TERM`, `LANG`)
+   - read: `~/.shizo` (engine, rules, attestations), `<AGENT_WORKDIR>`
+   - read/write: `~/.shizo/logs`, the named source directories and files only.
+     Keep `.git`, `.claude`, and `.shizo` read-only: allowed redirects into
+     them can run arbitrary commands or unregister the hook
+     (`README.md#example-sandbox-profile`).
 4. Verify from inside the sandbox:
 
    ```sh
