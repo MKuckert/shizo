@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude", "nolabs-ai/opencode"],
   "meta": {
     "name": "shizo-claude",
-    "version": "12"
+    "version": "14"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -27,10 +27,10 @@
       "$WORKDIR/tools"
     ],
     "allow_file": [
-      "$WORKDIR/BACKLOG.md",
       "$WORKDIR/CLAUDE.md",
       "$WORKDIR/Makefile",
-      "$WORKDIR/README.md"
+      "$WORKDIR/README.md",
+      "$WORKDIR/.mcp.json"
     ],
     "deny": ["~/.gitconfig"],
     "read_file": [

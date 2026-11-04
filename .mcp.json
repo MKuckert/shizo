@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kanzo": {
+      "type": "http",
+      "url": "http://localhost:4242/mcp?project=shizo"
+    }
+  }
+}
