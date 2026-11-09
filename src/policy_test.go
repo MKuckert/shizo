@@ -109,6 +109,10 @@ func TestPolicyRedirectContainment(t *testing.T) {
 		{`git status > out.txt`, kindAllow},         // in cwd
 		{`git status > ` + tmp + `/x`, kindAllow},   // in a tmpdir
 		{`git status > /dev/null`, kindAllow},       // whitelisted device
+		{`git status > /dev/stdout`, kindAllow},     // whitelisted device
+		{`git status 2> /dev/stderr`, kindAllow},    // whitelisted device
+		{`git status > //dev/null`, kindDeny},       // double-slash spelling is not the device
+		{`git status > /dev/null2`, kindDeny},       // unknown device fails containment
 		{`git status > /etc/passwd`, kindDeny},      // absolute escape
 		{`git status > ../../etc/passwd`, kindDeny}, // .. escape out of cwd and tmp
 		{`git status > sub/x`, kindAllow},           // nested in cwd
