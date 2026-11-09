@@ -47,6 +47,7 @@ Together, the sandbox and the static rule layer produce three outcomes:
 - [`docs/RULES.md`](docs/RULES.md): rule files, matching, trust, and attestation
 - [`docs/EVALUATION.md`](docs/EVALUATION.md): ordered decision pipeline
 - [`docs/CLAUDE_CODE_HOOKS.md`](docs/CLAUDE_CODE_HOOKS.md): hook I/O and wrapper behavior
+- [`docs/PI.md`](docs/PI.md): using shizo as the permission extension for the pi coding agent
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): assumptions, decisions, and residual risks
 
 ## Install

@@ -74,7 +74,7 @@ Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
 | `shizo.sh`       | wrapper installed as the hook `command`; fails closed      |
-| `conf/`         | starter global rules, example Claude settings, editor grammar |
+| `conf/`         | starter global rules, example Claude settings, editor grammar, pi extension (`conf/pi/shizo.ts`) |
 
 ## Rules DSL (see `docs/RULES.md`)
 

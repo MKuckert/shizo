@@ -263,6 +263,76 @@ func TestInstallMissingWrapper(t *testing.T) {
 	}
 }
 
+// fakePiExtension places a stub shizo-pi.ts next to the fake wrapper.
+func fakePiExtension(t *testing.T) string {
+	t.Helper()
+	wrapper := fakeWrapper(t)
+	ext := filepath.Join(filepath.Dir(wrapper), "shizo-pi.ts")
+	if err := os.WriteFile(ext, []byte("// stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return ext
+}
+
+func TestInstallPiExtension(t *testing.T) {
+	ext := fakePiExtension(t)
+	proj, home := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+
+	cases := []struct {
+		name, target string
+		args         []string
+	}{
+		{"project default", filepath.Join(proj, ".pi", "extensions", "shizo.ts"), []string{"pi-extension"}},
+		{"project flag", filepath.Join(proj, ".pi", "extensions", "shizo.ts"), []string{"pi-extension", "--project"}},
+		{"global", filepath.Join(home, ".pi", "agent", "extensions", "shizo.ts"), []string{"pi-extension", "--global"}},
+	}
+	for _, c := range cases {
+		os.RemoveAll(filepath.Join(proj, ".pi"))
+		os.RemoveAll(filepath.Join(home, ".pi"))
+		code, out, errb := runInstallIn(t, proj, c.args...)
+		if code != 0 || !strings.Contains(out, "installed pi extension") {
+			t.Fatalf("%s: code=%d out=%q err=%q", c.name, code, out, errb)
+		}
+		if got, err := os.Readlink(c.target); err != nil || got != ext {
+			t.Errorf("%s: link = %q, %v; want %q", c.name, got, err, ext)
+		}
+		code, out, _ = runInstallIn(t, proj, c.args...)
+		if code != 0 || !strings.Contains(out, "already installed") {
+			t.Errorf("%s rerun: code=%d out=%q", c.name, code, out)
+		}
+	}
+}
+
+func TestInstallPiExtensionRefusals(t *testing.T) {
+	fakePiExtension(t)
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	if code, _, _ := runInstallIn(t, proj, "pi-extension", "--local"); code != 2 {
+		t.Errorf("--local: code=%d, want 2", code)
+	}
+
+	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	os.WriteFile(target, []byte("mine"), 0o644)
+	code, _, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 1 || !strings.Contains(errb, "already exists") {
+		t.Errorf("existing file: code=%d err=%q", code, errb)
+	}
+	if b, _ := os.ReadFile(target); string(b) != "mine" {
+		t.Errorf("existing file was overwritten: %q", b)
+	}
+}
+
+func TestInstallPiExtensionMissingSource(t *testing.T) {
+	fakeWrapper(t) // wrapper but no shizo-pi.ts
+	code, _, errb := runInstallIn(t, t.TempDir(), "pi-extension")
+	if code != 1 || !strings.Contains(errb, "make install") {
+		t.Errorf("code=%d err=%q", code, errb)
+	}
+}
+
 func TestInstallHelp(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := runInstall([]string{"--help"}, &out, &errb); code != 0 {

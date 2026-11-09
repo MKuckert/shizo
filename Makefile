@@ -54,6 +54,8 @@ install: build
 	cp "$(BIN)" "$(ENGINE)/shizo"
 	cp "$(SRC)/shizo.sh" "$(ENGINE)/shizo.sh"
 	chmod 0755 "$(ENGINE)/shizo" "$(ENGINE)/shizo.sh"
+	cp conf/pi/shizo.ts "$(ENGINE)/shizo-pi.ts"
+	chmod 0644 "$(ENGINE)/shizo-pi.ts"
 	if [ ! -f "$(GLOBAL)/rules" ]; then \
 		cp conf/global-rules.starter "$(GLOBAL)/rules"; \
 		echo "installed starter rules -> $(GLOBAL)/rules"; \

@@ -15,16 +15,23 @@ import (
 // pipeline. It merges into whatever is already in the file and refuses to
 // write over JSON it cannot parse.
 
-const installUsage = `shizo install claude-hook — register the shizo.sh wrapper as a
-PreToolUse/Bash hook in a Claude Code settings file, merging into whatever
-is already there. Operator-only; never touches the hook pipeline.
+const installUsage = `shizo install — wire shizo into a coding agent. Operator-only;
+never touches the hook pipeline.
 
 usage: shizo install claude-hook [--project | --local | --global]
+       shizo install pi-extension [--project | --global]
+
+claude-hook registers the shizo.sh wrapper as a PreToolUse/Bash hook in a
+Claude Code settings file, merging into whatever is already there.
+pi-extension symlinks the installed pi extension (engine/shizo-pi.ts) into
+pi's extension directory (docs/PI.md); it never overwrites a different file.
 
 Flags:
-  --project   write .claude/settings.json in the cwd (default)
-  --local     write .claude/settings.local.json in the cwd
-  --global    write $HOME/.claude/settings.json
+  --project   claude-hook: .claude/settings.json in the cwd (default)
+              pi-extension: .pi/extensions/shizo.ts in the cwd (default)
+  --local     claude-hook only: .claude/settings.local.json in the cwd
+  --global    claude-hook: $HOME/.claude/settings.json
+              pi-extension: $HOME/.pi/agent/extensions/shizo.ts
 
 Exit 0 on success (or if already installed), 1 on an I/O or parse
 problem, 2 on a usage problem.`
@@ -58,8 +65,14 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 			positional = append(positional, a)
 		}
 	}
-	if len(positional) != 1 || positional[0] != "claude-hook" {
-		return usageErr("expected exactly one target: claude-hook")
+	if len(positional) != 1 || (positional[0] != "claude-hook" && positional[0] != "pi-extension") {
+		return usageErr("expected exactly one target: claude-hook or pi-extension")
+	}
+	if positional[0] == "pi-extension" {
+		if targetFlag == "--local" {
+			return usageErr("pi-extension has no --local scope")
+		}
+		return installPiExtension(targetFlag == "--global", stdout, stderr)
 	}
 
 	switch targetFlag {
@@ -104,7 +117,10 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 // wrapperPath is the shizo.sh next to the running binary. We register the
 // wrapper, never the binary (docs/CLAUDE_CODE_HOOKS.md), and refuse to write
 // a dangling hook.
-func wrapperPath() (string, error) {
+func wrapperPath() (string, error) { return siblingOfExe("shizo.sh", "wrapper") }
+
+// siblingOfExe resolves a file installed next to the running binary.
+func siblingOfExe(name, label string) (string, error) {
 	exe, err := installExe()
 	if err != nil {
 		return "", fmt.Errorf("cannot locate the shizo binary: %w", err)
@@ -112,11 +128,44 @@ func wrapperPath() (string, error) {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	p := filepath.Join(filepath.Dir(exe), "shizo.sh")
+	p := filepath.Join(filepath.Dir(exe), name)
 	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("wrapper not found at %s — run `make install` first", p)
+		return "", fmt.Errorf("%s not found at %s — run `make install` first", label, p)
 	}
 	return p, nil
+}
+
+// installPiExtension symlinks the engine's shizo-pi.ts into pi's extension
+// directory (docs/PI.md). Idempotent; a different existing file or link is an
+// error, never an overwrite.
+func installPiExtension(global bool, stdout, stderr io.Writer) int {
+	src, err := siblingOfExe("shizo-pi.ts", "pi extension")
+	if err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	target := filepath.Join(".pi", "extensions", "shizo.ts")
+	if global {
+		target = filepath.Join(os.Getenv("HOME"), ".pi", "agent", "extensions", "shizo.ts")
+	}
+	if cur, err := os.Readlink(target); err == nil && cur == src {
+		fmt.Fprintf(stdout, "already installed -> %s\n", target)
+		return 0
+	}
+	if _, err := os.Lstat(target); err == nil {
+		fmt.Fprintf(stderr, "install: %s already exists and is not the shizo extension — fix or move it first\n", target)
+		return 1
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	if err := os.Symlink(src, target); err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "installed pi extension -> %s\n", target)
+	return 0
 }
 
 func readSettings(path string) (map[string]any, error) {

@@ -42,7 +42,7 @@ Commands:
   attest      record operator approval of a rule tier (required before it is trusted)
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
-  install     register the shizo.sh wrapper as a Claude Code PreToolUse hook
+  install     register the Claude Code hook or the pi extension
   info        print the paths shizo resolves (rules, logs, engine, hook command)
   help [cmd]  show this overview, or detailed usage for a command
               (aliases: --help, -h, -?)
