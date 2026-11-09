@@ -29,9 +29,11 @@ archives:
           - zip
     files:
       - src: src/shizo.sh
-        dst: .
-      - src: conf/**/*
+        dst: shizo.sh
+      - src: conf/*
         dst: conf
+      - src: LICENSE
+        dst: LICENSE
 
 checksum:
   name_template: checksums.txt
