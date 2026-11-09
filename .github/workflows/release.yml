@@ -1,0 +1,93 @@
+name: Release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: src/go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      # The shipped version is tag-injected via .goreleaser.yaml ldflags
+      # ({{.Version}} strips the leading "v"); assert the built binary
+      # reports the tag so a stale hardcoded version cannot ship.
+      - name: Verify tag-derived version
+        run: |
+          go build -ldflags "-X main.version=${GITHUB_REF_NAME#v}" -o /tmp/shizo .
+          got="$(/tmp/shizo --version)"
+          if [ "$got" != "shizo ${GITHUB_REF_NAME#v}" ]; then
+            echo "version mismatch: binary reports '$got', tag is $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          echo "version check: $got"
+
+  goreleaser:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: src/go.mod
+
+      - name: Vulnerability scan
+        working-directory: src
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          distribution: goreleaser
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Notifies the homebrew-tap repo to bump the shizo formula.
+      # Runs with its own token (a PAT with contents read+write on the tap
+      # repo only; stored as the BUMP_TAP_TOKEN secret in this repo).
+      # Must not fail the release if the dispatch itself errors — artifacts
+      # are already published; the tap can be bumped manually.
+      - name: Trigger tap bump
+        if: success()
+        continue-on-error: true
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "BUMP_TAP_TOKEN not set, skipping tap dispatch"
+            exit 0
+          fi
+          gh api -X POST repos/MKuckert/homebrew-tap/dispatches \
+            -f event_type=release-bumped \
+            -f "client_payload[tag]=$GITHUB_REF_NAME" \
+            -f client_payload[formula]=shizo
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_TAP_TOKEN }}
