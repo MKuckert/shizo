@@ -47,8 +47,12 @@ release:
     # GitLab's internal CA is self-signed; point Go's TLS stack at the runner-
     # provided CA bundle so goreleaser can reach the releases API.
     SSL_CERT_FILE: $CI_SERVER_TLS_CA_FILE
+    GIT_DEPTH: "0"
   before_script:
     - test -n "$SSL_CERT_FILE" && test -r "$SSL_CERT_FILE"
+    # The checkout's owner differs from the container user; git refuses it
+    # ("dubious ownership") unless the dir is marked safe.
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - go install github.com/goreleaser/goreleaser/v2@v2
   script:
     - goreleaser release --clean
