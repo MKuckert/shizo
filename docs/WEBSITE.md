@@ -62,6 +62,6 @@ If it ever falls short, shelling out to `dart-sass` is the documented fallback
 
 ## Deployment
 
-`public/` is the directory GitLab Pages serves. The CI deploy job ships with
-the goreleaser/CI backlog item, not separately. Until then, preview locally
-via `serve`.
+`public/` is the directory GitHub Pages serves. The `pages` CI job builds it
+with `make site` on every push to `main` and deploys it (see
+`docs/tooling/CI.md`). To preview locally, use `serve`.

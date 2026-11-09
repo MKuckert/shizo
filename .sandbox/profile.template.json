@@ -3,7 +3,7 @@
   "extends": ["nolabs-ai/claude", "nolabs-ai/opencode-v1", "nolabs-ai/pi"],
   "meta": {
     "name": "shizo",
-    "version": "16"
+    "version": "18"
   },
   "groups": {
     "include": ["go_runtime", "go_runtime_macos"]
@@ -13,7 +13,6 @@
   },
   "filesystem": {
     "allow": [
-      "~/.npm",
       "~/.go",
       "~/.shizo/logs",
       "$WORKDIR/cmd",
@@ -29,8 +28,7 @@
     "allow_file": [
       "$WORKDIR/CLAUDE.md",
       "$WORKDIR/Makefile",
-      "$WORKDIR/README.md",
-      "$WORKDIR/.mcp.json"
+      "$WORKDIR/README.md"
     ],
     "deny": ["~/.gitconfig"],
     "read_file": [
@@ -40,9 +38,11 @@
       "~/.gitignore",
       "~/.bashrc",
       "~/.bashprofile",
-      "/opt/homebrew/bin/go"
+      "/opt/homebrew/bin/go",
+      "$WORKDIR/.mcp.json"
     ],
     "read": [
+      "~/.npm",
       "~/repos/shizo",
       "~/.CFUserTextEncoding",
       "~/.shizo",

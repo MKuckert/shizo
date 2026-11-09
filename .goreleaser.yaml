@@ -65,11 +65,7 @@ changelog:
       order: 999
 
 release:
-  gitlab:
-    owner: "{{ .Env.CI_PROJECT_NAMESPACE }}"
-    name: "{{ .Env.CI_PROJECT_NAME }}"
+  github:
+    owner: MKuckert
+    name: shizo
   extra_files: []
-
-gitlab_urls:
-  api: https://gitlab.ssc-os.local/api/v4
-  download: https://gitlab.ssc-os.local
