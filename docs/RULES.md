@@ -8,7 +8,7 @@ never executed. Shell-style quoting is handled by mvdan's word parser.
 | Tier | Location | Required | Directives |
 | --- | --- | --- | --- |
 | Global | `$SHIZO_DIR/global/rules`, otherwise `$HOME/.shizo/global/rules` | yes | honored |
-| Project | `<cwd>/.shizo` (no ancestor search) | no | ignored and logged |
+| Project | `<cwd>/.shizo` (no ancestor search) | no | `trust` honored under the global `project-trust` gate; others ignored and logged |
 
 An unreadable or malformed required/present tier denies every command. Project
 allows can change `ask` to `allow`, and project denies can tighten policy, but no
@@ -31,14 +31,39 @@ must precede rules. Any malformed line fails the complete load.
 ## Directives
 
 Directives are global-only because they can loosen policy. In a project tier
-they are ignored and logged.
+they are ignored and logged — with one exception: `trust`, which under the
+global `project-trust under-cwd` gate a project may use to add trusted
+directories inside its own tree (see below).
 
-### `trust <absolute-directory>`
+### `trust <dir>`
 
 Adds one directory to the trusted executable set. It is repeatable and does not
 modify `PATH` order: lookup uses inherited `PATH`, then checks whether the
-result's containing directory is trusted. The argument must be one absolute
-path.
+result's containing directory is trusted. In the global tier the argument must
+be one absolute path.
+
+In the project tier, `trust` is honored only when the global `project-trust`
+gate is `under-cwd`, and then only for directories that resolve inside the
+project directory (the directory containing `.shizo`). The argument may be
+relative — it is resolved against that directory — so `trust node_modules/.bin`
+needs no absolute path. Any other project `trust` line (gate off, or a dir that
+escapes the directory) is ignored and logged. A trusted dir alone allows
+nothing: commands from it still need an allow rule, still lose to any deny, and
+still hit the unconditional denials.
+
+### `project-trust <off|under-cwd>`
+
+Optional, may appear once. Controls whether the project tier may add trusted
+directories:
+
+- `off` (default) — every project-tier `trust` line is ignored and logged.
+- `under-cwd` — project `trust` dirs are honored, but only when they resolve
+  inside the project directory; escaping dirs are ignored and logged.
+
+The authority to widen the trusted set stays in the global tier; the specific
+dirs go in the (attested) project file. There is deliberately no mode that
+honors arbitrary dirs — that would put unfenced widening in the
+attacker-editable tier.
 
 ### `sandbox <nono|dangerously-none>`
 
@@ -226,7 +251,14 @@ shizo attest [FILE]     # default: <cwd>/.shizo
 
 Normalization parses the tier, removes comments and whitespace, sorts rules,
 serializes them canonically, and hashes the result with SHA-256. Cosmetic edits
-therefore do not require approval. Records live under
+therefore do not require approval. The canonical serialization is versioned in
+the record (`norm-version`); a format change invalidates existing records and
+requires re-attestation. For a project tier the canonical form also includes
+every `trust` line the loader would honor under the current gate and fence, so
+adding such a line to an attested file breaks its hash; a line the loader
+ignores changes nothing. Project records store no `PATH` snapshot: project
+trust dirs are cwd-relative and typically absent from `PATH`, so the within-cwd
+fence plus the rules hash is the control. Records live under
 `$SHIZO_DIR/attestations/`; the global record also stores trusted entries
 from live `PATH` in search order.
 

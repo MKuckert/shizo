@@ -78,11 +78,12 @@ Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 
 ## Rules DSL (see `docs/RULES.md`)
 
-- Directives (`returntype`, `trust`, `sandbox`) are **global-tier only** and
-  must precede any `allow`/`deny`. In a project file they are ignored and logged.
+- Directives (`returntype`, `trust`, `sandbox`, `project-trust`) are **global-tier only** and
+  must precede any `allow`/`deny`. In a project file they are ignored and logged — except
+  `trust`, which the global `project-trust under-cwd` gate honors, fenced to the project directory.
 - Project tier can never **widen a global `deny`**. It may add `deny` rules, and its `allow`
   rules can turn an otherwise-unmatched (`ask`) command into `allow` — but a global `deny`
-  always wins. Loosening directives (`trust`/`sandbox`/`returntype`) are global-only.
+  always wins. Loosening directives (`trust`/`sandbox`/`returntype`/`project-trust`) are global-only.
 - `allow git status ANY` — `ANY` matches 0-n tokens (max one per rule).
 - `deny git reset HAS --hard` — `HAS` matches one flag at any position.
 - A literal argument spelled `ANY`/`HAS` must be single-quoted.

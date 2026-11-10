@@ -56,7 +56,7 @@ func TestTestCwdPicksProjectTier(t *testing.T) {
 	proj := t.TempDir()
 	projBody := "deny git status ANY\n"
 	projPath := writeFile(t, proj, ".shizo", projBody)
-	attestProject(t, installRoot(), projPath, projBody)
+	attestProject(t, installRoot(), projPath, projBody, "off")
 
 	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", proj, "git", "status")
 	if rc != 2 || !strings.Contains(out, "decision: deny") {

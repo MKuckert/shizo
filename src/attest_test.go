@@ -15,7 +15,7 @@ func attestGlobal(t *testing.T, root, content string) {
 	t.Helper()
 	t.Setenv("SHIZO_DIR", root)
 	t.Setenv("NONO_CAP_FILE", "") // probe is sandbox-only; most tests aren't
-	norm, reason, ok := normalizeTier(content, false)
+	norm, reason, ok := normalizeTier(content, false, "", "")
 	if !ok {
 		t.Fatalf("attestGlobal: fixture content failed to normalize: %s", reason)
 	}
@@ -30,14 +30,15 @@ func attestGlobal(t *testing.T, root, content string) {
 }
 
 // attestProject writes a passing attestation record for a project tier at
-// path, under root's attestation store.
-func attestProject(t *testing.T, root, path, content string) {
+// path, under root's attestation store. gate is the global project-trust mode
+// in effect; the fence base is path's own directory.
+func attestProject(t *testing.T, root, path, content, gate string) {
 	t.Helper()
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		t.Fatalf("attestProject: %s", err)
 	}
-	norm, reason, ok := normalizeTier(content, true)
+	norm, reason, ok := normalizeTier(content, true, gate, filepath.Dir(abs))
 	if !ok {
 		t.Fatalf("attestProject: fixture content failed to normalize: %s", reason)
 	}
@@ -58,11 +59,11 @@ func TestNormalizeTierDeterministic(t *testing.T) {
 		"sandbox   nono\n\n# trust dirs, reversed order\ntrust /usr/bin\ntrust /bin\n" +
 		"deny git push ANY\nallow git status ANY\n"
 
-	na, reason, ok := normalizeTier(a, false)
+	na, reason, ok := normalizeTier(a, false, "", "")
 	if !ok {
 		t.Fatalf("a: %s", reason)
 	}
-	nb, reason, ok := normalizeTier(b, false)
+	nb, reason, ok := normalizeTier(b, false, "", "")
 	if !ok {
 		t.Fatalf("b: %s", reason)
 	}
@@ -75,17 +76,17 @@ func TestNormalizeTierDeterministic(t *testing.T) {
 }
 
 func TestNormalizeTierRejectsMalformed(t *testing.T) {
-	if _, _, ok := normalizeTier("wat is this\n", false); ok {
+	if _, _, ok := normalizeTier("wat is this\n", false, "", ""); ok {
 		t.Error("malformed line should fail to normalize")
 	}
-	if _, _, ok := normalizeTier("allow git status ANY\n", false); ok {
+	if _, _, ok := normalizeTier("allow git status ANY\n", false, "", ""); ok {
 		t.Error("global tier missing sandbox should fail to normalize")
 	}
 }
 
 func TestNormalizeTierRuleChangeAltersHash(t *testing.T) {
-	na, _, _ := normalizeTier("sandbox nono\nallow git status ANY\n", false)
-	nb, _, _ := normalizeTier("sandbox nono\nallow git status HAS -s\n", false)
+	na, _, _ := normalizeTier("sandbox nono\nallow git status ANY\n", false, "", "")
+	nb, _, _ := normalizeTier("sandbox nono\nallow git status HAS -s\n", false, "", "")
 	if hashCanonical(na.canonical) == hashCanonical(nb.canonical) {
 		t.Error("a real rule change must change the hash")
 	}
@@ -95,8 +96,8 @@ func TestNormalizeTierRuleChangeAltersHash(t *testing.T) {
 // arg) and `allow foo a b` (two args) are different match rules and must not
 // collide, or a tamper could rewrite one as the other undetected.
 func TestNormalizeTierTokenBoundaryInjective(t *testing.T) {
-	na, r1, ok1 := normalizeTier("sandbox nono\nallow foo 'a b'\n", false)
-	nb, r2, ok2 := normalizeTier("sandbox nono\nallow foo a b\n", false)
+	na, r1, ok1 := normalizeTier("sandbox nono\nallow foo 'a b'\n", false, "", "")
+	nb, r2, ok2 := normalizeTier("sandbox nono\nallow foo a b\n", false, "", "")
 	if !ok1 || !ok2 {
 		t.Fatalf("normalize failed: %s / %s", r1, r2)
 	}
@@ -104,8 +105,8 @@ func TestNormalizeTierTokenBoundaryInjective(t *testing.T) {
 		t.Errorf("token-boundary change collided: %q == %q", na.canonical, nb.canonical)
 	}
 	// A literal argument spelled ANY must not collide with the ANY keyword.
-	nc, _, _ := normalizeTier("sandbox nono\nallow foo 'ANY'\n", false)
-	nd, _, _ := normalizeTier("sandbox nono\nallow foo ANY\n", false)
+	nc, _, _ := normalizeTier("sandbox nono\nallow foo 'ANY'\n", false, "", "")
+	nd, _, _ := normalizeTier("sandbox nono\nallow foo ANY\n", false, "", "")
 	if hashCanonical(nc.canonical) == hashCanonical(nd.canonical) {
 		t.Error("literal 'ANY' collided with the ANY keyword")
 	}
@@ -203,7 +204,7 @@ func TestLoadConfigDeniesOnProjectHashMismatch(t *testing.T) {
 	projDir := t.TempDir()
 	projBody := "deny git push ANY\n"
 	proj := writeFile(t, projDir, ".shizo", projBody)
-	attestProject(t, dir, proj, projBody)
+	attestProject(t, dir, proj, projBody, "off")
 	writeFile(t, projDir, ".shizo", projBody+"allow rm ANY\n") // tamper after attesting
 	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
 		t.Fatal("project rules changed since attestation must deny all")
@@ -312,5 +313,129 @@ func TestRunAttestRejectsMalformedRules(t *testing.T) {
 	var out, errb bytes.Buffer
 	if rc := runAttest([]string{"--global"}, &out, &errb); rc != 1 {
 		t.Errorf("attest --global on malformed rules: rc=%d", rc)
+	}
+}
+
+func TestProjectTrustLineFlipsHash(t *testing.T) {
+	base := "/repo"
+	na, _, ok := normalizeTier("deny rm ANY\n", true, "under-cwd", base)
+	if !ok {
+		t.Fatal("normalize a")
+	}
+	nb, _, ok := normalizeTier("deny rm ANY\ntrust node_modules/.bin\n", true, "under-cwd", base)
+	if !ok {
+		t.Fatal("normalize b")
+	}
+	if hashCanonical(na.canonical) == hashCanonical(nb.canonical) {
+		t.Error("an honored project trust line must change the canonical hash")
+	}
+	// Gate off: the same line is ignored, so it must not enter the hash.
+	nc, _, ok := normalizeTier("deny rm ANY\ntrust node_modules/.bin\n", true, "off", base)
+	if !ok {
+		t.Fatal("normalize c")
+	}
+	if hashCanonical(na.canonical) != hashCanonical(nc.canonical) {
+		t.Error("an ignored (gate-off) trust line must not change the canonical hash")
+	}
+}
+
+func TestGlobalProjectTrustFlipsHash(t *testing.T) {
+	a, _, ok := normalizeTier("sandbox nono\nallow ls ANY\n", false, "", "")
+	if !ok {
+		t.Fatal("normalize a")
+	}
+	b, _, ok := normalizeTier("sandbox nono\nproject-trust under-cwd\nallow ls ANY\n", false, "", "")
+	if !ok {
+		t.Fatal("normalize b")
+	}
+	if hashCanonical(a.canonical) == hashCanonical(b.canonical) {
+		t.Error("the project-trust mode must be part of the global canonical hash")
+	}
+}
+
+func TestLoadConfigDeniesOnProjectTrustChange(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\ndeny git push ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	projDir := t.TempDir()
+	projBody := "deny rm ANY\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	if cfg := loadConfig(g, proj, installRoot()); cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	// Attacker appends a within-cwd trust line to the attested project file.
+	writeFile(t, projDir, ".shizo", projBody+"trust node_modules/.bin\n")
+	if cfg := loadConfig(g, proj, installRoot()); !cfg.denyAll {
+		t.Error("adding a project trust line must break attestation")
+	}
+}
+
+func TestLoadConfigProjectTrustEscapeDoesNotFlipHash(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\ndeny git push ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	projDir := t.TempDir()
+	projBody := "deny rm ANY\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	// An escaping trust line is ignored by the loader, so it hashes to nothing.
+	writeFile(t, projDir, ".shizo", projBody+"trust /tmp/evil\n")
+	if cfg := loadConfig(g, proj, installRoot()); cfg.denyAll {
+		t.Errorf("an ignored (escaping) trust line must not break attestation: %s", cfg.denyReason)
+	}
+}
+
+func TestRunAttestProjectTrustHonored(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root)
+	body := "project-trust under-cwd\nsandbox nono\nallow git status ANY\n"
+	g := writeFile(t, root, "global/rules", body)
+	attestGlobal(t, root, body)
+
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	var out, errb bytes.Buffer
+	if rc := runAttest([]string{proj}, &out, &errb); rc != 0 {
+		t.Fatalf("runAttest: rc=%d %s", rc, errb.String())
+	}
+	abs, _ := filepath.Abs(proj)
+	recData, err := os.ReadFile(projectAttestPath(root, abs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "trust " + filepath.Join(projDir, "node_modules", ".bin")
+	if !strings.Contains(string(recData), want) {
+		t.Errorf("record should attest the honored trust line %q:\n%s", want, recData)
+	}
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if len(cfg.trusted) != 1 || cfg.trusted[0] != filepath.Join(projDir, "node_modules", ".bin") {
+		t.Errorf("trusted = %+v", cfg.trusted)
+	}
+}
+
+func TestRunAttestProjectTrustGateOff(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root) // no global/rules -> gate off
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	var out, errb bytes.Buffer
+	if rc := runAttest([]string{proj}, &out, &errb); rc != 0 {
+		t.Fatalf("runAttest: rc=%d %s", rc, errb.String())
+	}
+	abs, _ := filepath.Abs(proj)
+	recData, err := os.ReadFile(projectAttestPath(root, abs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(recData), "trust ") {
+		t.Errorf("gate off: record must not attest the trust line:\n%s", recData)
 	}
 }

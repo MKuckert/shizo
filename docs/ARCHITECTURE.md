@@ -36,8 +36,8 @@ revisited if either behavior changes.
 | Canonical paths        | Do not use `realpath`                                                              | Policies refer to stable lookup paths rather than versioned symlink targets        |
 | Redirects              | Contain writes below `cwd`, `$TMPDIR`, or `/tmp`; admit only the fixed devices `/dev/null`, `/dev/stdout`, and `/dev/stderr`; deny writes when `cd` appears | Prevents policy-approved commands from writing arbitrary sandbox-visible files; the devices are admitted because they cannot leak data — `/dev/null` discards and the others reach only the process's own streams |
 | Policy tiers           | Required global tier plus optional cwd project tier                                | Repositories can add policy, but a global deny remains absolute                    |
-| Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only                               | A project cannot alter the execution boundary or output mode                       |
-| Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
+| Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only; a project `trust` is honored only under the global `project-trust under-cwd` gate, fenced to the project directory | A project cannot alter the execution boundary or output mode; per-repo trust stays inside the repo tree |
+| Project integrity      | Hash normalized tiers, including honored project `trust` lines, and verify a read-only attestation store | Workspace edits fail closed until approved by an operator                          |
 | Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | The agent cannot replace the gate; its registration is protected by the profile    |
 | Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
 | Automode               | Defer only unmatched results; explicit ask rules emit `ask`                        | Explicit allow, deny, and ask policy remains authoritative                         |
@@ -73,6 +73,11 @@ trusted-`PATH` snapshot, and that the record store cannot be overwritten,
 extended, or replaced through its parent. Unknown record schema versions fail
 closed.
 
+The project canonical form includes every `trust` line the loader would honor
+under the gate and fence, so an attacker who adds a within-cwd `trust` line to
+an attested project file breaks its hash; a line the fence ignores hashes to
+nothing.
+
 In hook mode, the installation root comes from the password database rather
 than `$HOME` or `$SHIZO_DIR`, preventing an agent-controlled environment
 from selecting forged rules. Operator commands continue to honor those
@@ -102,6 +107,13 @@ that can edit both policy and records makes verification meaningless.
   machine for every present project tier. Root (`euid == 0`) bypasses POSIX
   file permissions, so `sandbox nono` explicitly rejects root to maintain this
   invariant; `dangerously-none` is required for root environments.
+- Project self-trust under the gate: `project-trust under-cwd` lets a repo
+  self-authorize binaries inside its own tree. Attestation hashes rule text,
+  not directory contents: an attested `trust node_modules/.bin` blesses
+  whatever binary later lands there (a poisoned dependency). The operator opts
+  into this per machine via the global gate — leaving it `off` restores the
+  old behavior — and can keep the blast radius small by not explicitly
+  `allow`ing repo-local binaries, so they fall back to `ask`.
 - Write containment admits any redirect below `cwd`, so an allowed `echo` can
   rewrite `.git/config` or `.claude/settings.json` unless the sandbox keeps them
   read-only. A writable workspace turns auto-allowed `git` subcommands into
@@ -128,9 +140,9 @@ trusted subset of `PATH` in order so such resolution changes fail closed.
 `shizo validate` is an operator-only linter, separate from hook evaluation.
 It reuses the runtime line parser but continues after errors to report all of
 them. Its semantic warnings are deliberately conservative: duplicates, ignored
-project directives, absent trust directories, rules for unconditional-deny or
-safe-builtin commands, and allow rules provably covered by a deny. Uncertain
-shadowing is not reported.
+project directives (including `trust` lines the gate or fence drops), absent
+trust directories, rules for unconditional-deny or safe-builtin commands, and
+allow rules provably covered by a deny. Uncertain shadowing is not reported.
 
 ## Recovery
 

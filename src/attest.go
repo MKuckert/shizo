@@ -78,15 +78,22 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	norm, reason, ok := normalizeTier(string(data), !global)
-	if !ok {
-		fmt.Fprintf(stderr, "attest: %s\n", reason)
-		return 1
-	}
-
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "attest: %s\n", err)
+		return 1
+	}
+
+	// A project tier's honored trust lines depend on the resolved global gate
+	// and the file's own directory (the fence base).
+	var gate, baseDir string
+	if !global {
+		gate = projectTrustGateFor(globalRulesPath())
+		baseDir = filepath.Dir(abs)
+	}
+	norm, reason, ok := normalizeTier(string(data), !global, gate, baseDir)
+	if !ok {
+		fmt.Fprintf(stderr, "attest: %s\n", reason)
 		return 1
 	}
 

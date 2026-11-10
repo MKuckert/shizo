@@ -1,7 +1,7 @@
 # shizo v0.1 global rules — starter for a fresh installation.
 #
 # Installed to $HOME/.shizo/global/rules (only if absent).
-# Directives (returntype, trust, sandbox) must come before any allow/deny rules.
+# Directives (returntype, trust, sandbox, project-trust) must come before any allow/deny rules.
 # Any deny wins over any allow; an unmatched command yields `ask`.
 
 # returntype: what to do when a command is not matched by any allow/deny rule.
@@ -20,6 +20,13 @@ sandbox nono
 # - ask: downgrade to ask so the operator sees the pipeline
 # - deny: deny any allowed command that receives stdin
 # stdin allow
+
+# project-trust: whether a project .shizo may add trusted directories.
+# - off: (default) project `trust` lines are ignored and logged
+# - under-cwd: project `trust` dirs are honored, but only inside the project
+#   directory (e.g. node_modules/.bin); a command from such a dir still needs
+#   an allow rule, and the project file must be re-attested when it changes
+# project-trust off
 
 # Trusted directories for executable binary (resolved via the inherited PATH, no realpath).
 trust /opt/homebrew/bin

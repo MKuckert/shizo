@@ -313,7 +313,7 @@ func TestProjectTighteningApplies(t *testing.T) {
 	projDir := t.TempDir()
 	projBody := "deny rm ANY\n"
 	proj := writeFile(t, projDir, ".shizo", projBody)
-	attestProject(t, dir, proj, projBody)
+	attestProject(t, dir, proj, projBody, "off")
 	cfg := loadConfig(g, filepath.Join(projDir, ".shizo"), installRoot())
 	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
 
@@ -371,5 +371,73 @@ func TestPolicyFlagSpellings(t *testing.T) {
 		if got.Kind != tc.want {
 			t.Errorf("%q: got %s (%s) want %v", tc.cmd, got.Kind, got.Reason, tc.want)
 		}
+	}
+}
+
+func TestProjectTrustNeedsAllowRule(t *testing.T) {
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\ntrust " + bin + "\nallow git status ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	pbin := filepath.Join(projDir, "node_modules", ".bin")
+	if err := os.MkdirAll(pbin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mkExe(t, pbin, "tool")
+	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
+
+	// No allow rule: resolves in the project-trusted dir but unmatched -> ask.
+	projBody := "trust node_modules/.bin\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if got, _ := decide("./node_modules/.bin/tool", projDir, cfg, env); got.Kind != kindUndecided {
+		t.Errorf("trusted but unmatched should ask, got %s (%s)", got.Kind, got.Reason)
+	}
+
+	// With an allow rule: allow.
+	projBody = "trust node_modules/.bin\nallow tool ANY\n"
+	proj = writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	cfg = loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if got, _ := decide("./node_modules/.bin/tool", projDir, cfg, env); got.Kind != kindAllow {
+		t.Errorf("trusted + allowed should allow, got %s (%s)", got.Kind, got.Reason)
+	}
+}
+
+func TestProjectTrustGateOffDoesNotResolve(t *testing.T) {
+	bin := t.TempDir()
+	mkExe(t, bin, "git")
+	dir := t.TempDir()
+	body := "sandbox nono\ntrust " + bin + "\nallow git status ANY\n" // gate off
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	pbin := filepath.Join(projDir, "node_modules", ".bin")
+	if err := os.MkdirAll(pbin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mkExe(t, pbin, "tool")
+	projBody := "trust node_modules/.bin\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "off")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	env := environ{path: bin, tmpdirs: []string{"/tmp"}, sandboxed: true}
+	if got, _ := decide("./node_modules/.bin/tool", projDir, cfg, env); got.Kind != kindDeny {
+		t.Errorf("gate off: project trust dir must not resolve, got %s (%s)", got.Kind, got.Reason)
 	}
 }

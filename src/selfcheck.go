@@ -198,7 +198,7 @@ func configLoadErrors(root string) []string {
 		return []string{"unreadable: " + err.Error()}
 	}
 	var msgs []string
-	for _, f := range validateFile(globalRules, string(data), false) {
+	for _, f := range validateFile(globalRules, string(data), false, "", "") {
 		if f.level == levelError {
 			msgs = append(msgs, fmt.Sprintf("line %d: %s", f.line, f.msg))
 		}
