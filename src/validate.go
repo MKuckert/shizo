@@ -102,10 +102,19 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 			findings = append(findings, finding{t.file, 0, levelError, "unreadable: " + err.Error()})
 			continue
 		}
-		findings = append(findings, validateFile(t.file, string(data), t.project, gate, filepath.Dir(t.file))...)
+		findings = append(findings, validateFile(t.file, string(data), t.project, gate, baseDirOf(t.file))...)
 	}
 
 	return report(stdout, findings)
+}
+
+// baseDirOf returns the directory of file, made absolute: with a relative file
+// path Dir would be "." and the under-cwd fence would reject every subdir.
+func baseDirOf(file string) string {
+	if abs, err := filepath.Abs(file); err == nil {
+		return filepath.Dir(abs)
+	}
+	return filepath.Dir(file)
 }
 
 // validateFile parses one tier collecting all syntax errors (rather than
@@ -233,8 +242,9 @@ func lintIgnoredDirectives(cfg *config, file string, lineOf map[string]int) []fi
 }
 
 // lintProjectTrust warns on project-tier trust lines the loader will ignore:
-// the gate is off, or the dir escapes the under-cwd fence. Honored dirs land in
-// cfg.trusted and get the usual missing-dir lint (docs/RULES.md: project-trust).
+// malformed shape, gate off, or a dir that escapes the under-cwd fence.
+// Honored dirs land in cfg.trusted and get the usual missing-dir lint
+// (docs/RULES.md: project-trust).
 func lintProjectTrust(cfg *config, file string, lineOf map[string]int, gate string) []finding {
 	var out []finding
 	for _, ln := range cfg.ignored {
@@ -242,10 +252,12 @@ func lintProjectTrust(cfg *config, file string, lineOf map[string]int, gate stri
 			continue
 		}
 		var msg string
-		if gate == "under-cwd" {
-			msg = "project trust is ignored: the directory must resolve inside the project directory (under-cwd fence)"
-		} else {
+		if toks, err := parseRuleWords(ln); err != nil || len(toks) != 2 || toks[1].kind != tokLiteral {
+			msg = "project trust is ignored: malformed line (expected `trust <dir>`; a dir with spaces must be quoted)"
+		} else if gate != "under-cwd" {
 			msg = "project trust is ignored: the global project-trust gate is off"
+		} else {
+			msg = "project trust is ignored: the directory must resolve inside the project directory (under-cwd fence)"
 		}
 		out = append(out, finding{file, lineOf[ln], levelWarn, msg})
 	}

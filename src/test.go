@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -79,6 +80,12 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if wd, err := os.Getwd(); err == nil {
 			*cwd = wd
 		}
+	}
+	// Resolution joins relative command paths against cwd and the project tier's
+	// fence base is its directory; make it absolute so `shizo test --cwd .`
+	// behaves like the hook, which always receives an absolute cwd.
+	if abs, err := filepath.Abs(*cwd); err == nil {
+		*cwd = abs
 	}
 
 	cfg := loadConfig(globalRulesPath(), projectRulesPathFor(*cwd), installRoot())

@@ -257,8 +257,9 @@ requires re-attestation. For a project tier the canonical form also includes
 every `trust` line the loader would honor under the current gate and fence, so
 adding such a line to an attested file breaks its hash; a line the loader
 ignores changes nothing. Project records store no `PATH` snapshot: project
-trust dirs are cwd-relative and typically absent from `PATH`, so the within-cwd
-fence plus the rules hash is the control. Records live under
+trust dirs resolve against the project directory (stored absolute in the
+canonical form) and are typically absent from `PATH`, so the within-cwd fence
+plus the rules hash is the control. Records live under
 `$SHIZO_DIR/attestations/`; the global record also stores trusted entries
 from live `PATH` in search order.
 

@@ -328,3 +328,38 @@ func TestValidateProjectTrustHonoredClean(t *testing.T) {
 		t.Errorf("expected no findings: %+v", fs)
 	}
 }
+
+func TestValidateProjectTrustMalformed(t *testing.T) {
+	body := "trust node_modules/.bin extra\n"
+	fs := validateFile(".shizo", body, true, "under-cwd", t.TempDir())
+	if !hasMsg(fs, "malformed") {
+		t.Errorf("expected malformed-line warning: %+v", fs)
+	}
+	if errs, _ := countLevels(fs); errs != 0 {
+		t.Errorf("warnings only: %+v", fs)
+	}
+}
+
+func TestRunValidateRelativeProjectFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root)
+	writeFile(t, root, "global/rules", "sandbox nono\nproject-trust under-cwd\nallow ls ANY\n")
+	projDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projDir, "node_modules", ".bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, projDir, ".shizo", "trust node_modules/.bin\n")
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if rc := runValidate([]string{"--project", ".shizo"}, &out, &errOut); rc != 0 {
+		t.Fatalf("rc=%d %s", rc, out.String())
+	}
+	if strings.Contains(out.String(), ": warning:") {
+		t.Errorf("an honored trust line given relatively must not warn: %s", out.String())
+	}
+}

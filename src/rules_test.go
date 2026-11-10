@@ -407,3 +407,48 @@ func TestProjectTrustEscapesIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectTrustDotHonorsRoot(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	projBody := "trust .\n" // the project directory itself stays inside the fence
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if len(cfg.trusted) != 1 || cfg.trusted[0] != projDir {
+		t.Errorf("trusted = %+v, want [%s]", cfg.trusted, projDir)
+	}
+}
+
+func TestProjectTrustRelativeProjectPath(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n"
+	writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, filepath.Join(projDir, ".shizo"), projBody, "under-cwd")
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadConfig(g, ".shizo", installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	want := filepath.Join(projDir, "node_modules", ".bin")
+	if len(cfg.trusted) != 1 || cfg.trusted[0] != want {
+		t.Errorf("relative project path: trusted = %+v, want [%s]", cfg.trusted, want)
+	}
+}

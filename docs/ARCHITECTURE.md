@@ -110,10 +110,12 @@ that can edit both policy and records makes verification meaningless.
 - Project self-trust under the gate: `project-trust under-cwd` lets a repo
   self-authorize binaries inside its own tree. Attestation hashes rule text,
   not directory contents: an attested `trust node_modules/.bin` blesses
-  whatever binary later lands there (a poisoned dependency). The operator opts
-  into this per machine via the global gate — leaving it `off` restores the
-  old behavior — and can keep the blast radius small by not explicitly
-  `allow`ing repo-local binaries, so they fall back to `ask`.
+  whatever binary later lands there (a poisoned dependency). The fence is
+  lexical, like the global trust dirs: a trusted dir may be a symlink
+  resolving outside the project tree, and binaries reached through it execute.
+  The operator opts into this per machine via the global gate — leaving it
+  `off` restores the old behavior — and can keep the blast radius small by not
+  explicitly `allow`ing repo-local binaries, so they fall back to `ask`.
 - Write containment admits any redirect below `cwd`, so an allowed `echo` can
   rewrite `.git/config` or `.claude/settings.json` unless the sandbox keeps them
   read-only. A writable workspace turns auto-allowed `git` subcommands into

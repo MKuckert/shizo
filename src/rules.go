@@ -47,6 +47,14 @@ func rootBlocksNono(euid int, mode string) string {
 func loadConfig(globalPath, projectPath, root string) *config {
 	cfg := &config{returnMode: "decision", projectTrust: "off"}
 
+	// The project tier's fence base is its directory; a relative path would make
+	// it "." and within() would reject every subdir, so resolve it first.
+	if projectPath != "" {
+		if abs, err := filepath.Abs(projectPath); err == nil {
+			projectPath = abs
+		}
+	}
+
 	globalData, err := os.ReadFile(globalPath)
 	if err != nil {
 		return denyAllConfig("global rules unreadable (" + globalPath + "): " + err.Error())
@@ -163,6 +171,19 @@ func projectTrustGateFor(globalPath string) string {
 	return cfg.projectTrust
 }
 
+// projectTrustDir resolves a project-tier trust argument against baseDir and
+// reports whether it stays inside the under-cwd fence (docs/RULES.md:
+// project-trust).
+func projectTrustDir(arg, baseDir string) (string, bool) {
+	dir := arg
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(baseDir, dir)
+	} else {
+		dir = filepath.Clean(dir)
+	}
+	return dir, within(dir, baseDir)
+}
+
 // tierState carries the per-file "seen" flags across parseLine calls: rules must
 // follow directives, and returntype/sandbox/stdin/project-trust may appear at most once.
 type tierState struct {
@@ -217,12 +238,7 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState, gate, b
 			// is honored when it resolves inside the project directory; anything
 			// else (gate off, escaping dir, malformed line) is ignored and logged.
 			if gate == "under-cwd" && len(toks) == 2 && toks[1].kind == tokLiteral {
-				dir := toks[1].text
-				if !filepath.IsAbs(dir) {
-					dir = filepath.Join(baseDir, dir)
-				}
-				dir = filepath.Clean(dir)
-				if within(dir, baseDir) {
+				if dir, ok := projectTrustDir(toks[1].text, baseDir); ok {
 					cfg.trusted = append(cfg.trusted, dir)
 					return "", true
 				}
