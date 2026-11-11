@@ -17,12 +17,13 @@ import (
 
 const (
 	attestSchema = "1"
-	normVersion  = "2"
+	normVersion  = "3" // v3: global canonical gains the project-trust line; project canonical gains honored trust lines
 )
 
 // tierNorm is one tier's canonical (order/comment/whitespace-independent)
-// serialization, ready to hash. trusted is only meaningful for the global tier
-// (used to compute the normalized-PATH component).
+// serialization, ready to hash. trusted is the tier's honored trust dirs: for
+// the global tier it feeds the normalized-PATH component; for a project tier
+// it is the under-cwd-fenced set that canonicalizeTier emits into the hash.
 type tierNorm struct {
 	canonical string
 	trusted   []string
@@ -31,9 +32,11 @@ type tierNorm struct {
 // normalizeTier parses tier content in isolation (independent of any other
 // tier) and returns its canonical serialization. Reuses parseTier/parseLine so
 // the attestation hash always reflects exactly what the loader would accept.
-func normalizeTier(content string, project bool) (tierNorm, string, bool) {
-	cfg := &config{returnMode: "decision"}
-	if reason, ok := parseTier(cfg, content, project); !ok {
+// gate and baseDir are the global project-trust mode and the project rules
+// file's directory; they decide which project trust lines are honored.
+func normalizeTier(content string, project bool, gate, baseDir string) (tierNorm, string, bool) {
+	cfg := &config{returnMode: "decision", projectTrust: "off"}
+	if reason, ok := parseTier(cfg, content, project, gate, baseDir); !ok {
 		return tierNorm{}, reason, false
 	}
 	if !project && cfg.sandboxMode == "" {
@@ -43,22 +46,33 @@ func normalizeTier(content string, project bool) (tierNorm, string, bool) {
 }
 
 // canonicalizeTier serializes a parsed tier deterministically: directives
-// (global only) then allow/deny rules, each group sorted, so comment/
-// whitespace/rule-order edits don't change the hash. Sound only because
+// (global only) then trust dirs, then allow/deny rules, each group sorted, so
+// comment/whitespace/rule-order edits don't change the hash. Sound only because
 // evaluation is order-independent (deny > ask > allow, RULES.md §4) — a rule's
 // effect never depends on its position relative to other rules of the same
-// action.
+// action. For a project tier cfg.trusted holds only the trust dirs parseLine
+// honored under the gate and fence, so every honored `trust` line is part of
+// the attested hash; a line the loader ignores changes nothing.
 func canonicalizeTier(cfg *config, project bool) string {
 	var lines []string
 	if !project {
 		lines = append(lines, "returntype "+cfg.returnMode)
 		lines = append(lines, "sandbox "+cfg.sandboxMode)
 		lines = append(lines, "stdin "+cfg.stdinDefault)
-		trusted := append([]string{}, cfg.trusted...)
-		sort.Strings(trusted)
-		for _, t := range trusted {
-			lines = append(lines, "trust "+t)
+		lines = append(lines, "project-trust "+cfg.projectTrust)
+	}
+	trusted := append([]string{}, cfg.trusted...)
+	sort.Strings(trusted)
+	// Dedupe: repeated trust lines (or equivalent spellings of the same dir,
+	// which parseLine cleans to one path) must not change the hash.
+	dedup := trusted[:0:0]
+	for _, t := range trusted {
+		if len(dedup) == 0 || dedup[len(dedup)-1] != t {
+			dedup = append(dedup, t)
 		}
+	}
+	for _, t := range dedup {
+		lines = append(lines, "trust "+t)
 	}
 	lines = append(lines, sortedRuleLines(cfg.allowRules)...)
 	lines = append(lines, sortedRuleLines(cfg.askRules)...)

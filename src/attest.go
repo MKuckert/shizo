@@ -25,8 +25,11 @@ rules hash. With no --global, attests the project tier at FILE (default:
 <cwd>/.shizo).
 
 Run this outside the sandbox, after reviewing the rules. The hook recomputes
-the hash on every command and denies everything on any divergence. Writes to
-$SHIZO_DIR/attestations/. Never touches the hook pipeline.`
+the hash on every command and denies everything on any divergence. A project
+tier's hash covers its honored trust lines, which depend on the installed
+global project-trust gate and the file's own directory — changing either
+invalidates the record. Writes to $SHIZO_DIR/attestations/. Never touches the
+hook pipeline.`
 
 func runAttest(args []string, stdout, stderr io.Writer) int {
 	global := false
@@ -78,15 +81,22 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	norm, reason, ok := normalizeTier(string(data), !global)
-	if !ok {
-		fmt.Fprintf(stderr, "attest: %s\n", reason)
-		return 1
-	}
-
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "attest: %s\n", err)
+		return 1
+	}
+
+	// A project tier's honored trust lines depend on the resolved global gate
+	// and the file's own directory (the fence base).
+	var gate, baseDir string
+	if !global {
+		gate = projectTrustGateFor(globalRulesPath())
+		baseDir = filepath.Dir(abs)
+	}
+	norm, reason, ok := normalizeTier(string(data), !global, gate, baseDir)
+	if !ok {
+		fmt.Fprintf(stderr, "attest: %s\n", reason)
 		return 1
 	}
 

@@ -81,6 +81,16 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	// A project tier's honored `trust` lines depend on the resolved global gate;
+	// the trust warnings below need it (docs/RULES.md: project-trust).
+	gate := "off"
+	for _, t := range targets {
+		if t.project {
+			gate = projectTrustGateFor(globalRulesPath())
+			break
+		}
+	}
+
 	var findings []finding
 	for _, t := range targets {
 		data, err := os.ReadFile(t.file)
@@ -92,16 +102,27 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 			findings = append(findings, finding{t.file, 0, levelError, "unreadable: " + err.Error()})
 			continue
 		}
-		findings = append(findings, validateFile(t.file, string(data), t.project)...)
+		findings = append(findings, validateFile(t.file, string(data), t.project, gate, baseDirOf(t.file))...)
 	}
 
 	return report(stdout, findings)
 }
 
+// baseDirOf returns the directory of file, made absolute: with a relative file
+// path Dir would be "." and the under-cwd fence would reject every subdir.
+func baseDirOf(file string) string {
+	if abs, err := filepath.Abs(file); err == nil {
+		return filepath.Dir(abs)
+	}
+	return filepath.Dir(file)
+}
+
 // validateFile parses one tier collecting all syntax errors (rather than
 // stopping at the first, as parseTier does), then runs the semantic lint pass.
-func validateFile(file, content string, project bool) []finding {
-	cfg := &config{returnMode: "decision"}
+// gate and baseDir are the resolved global project-trust mode and this file's
+// directory; they decide which of a project tier's trust lines are honored.
+func validateFile(file, content string, project bool, gate, baseDir string) []finding {
+	cfg := &config{returnMode: "decision", projectTrust: "off"}
 	var st tierState
 	var out []finding
 
@@ -117,7 +138,7 @@ func validateFile(file, content string, project bool) []finding {
 		}
 
 		beforeTrust := len(cfg.trusted)
-		reason, ok := parseLine(cfg, trimmed, project, &st)
+		reason, ok := parseLine(cfg, trimmed, project, &st, gate, baseDir)
 		if !ok {
 			out = append(out, finding{file, lineNo, levelError, reason})
 			continue
@@ -144,6 +165,7 @@ func validateFile(file, content string, project bool) []finding {
 	out = append(out, lintDeadRules(cfg, file, lineByRaw)...)
 	out = append(out, lintShadowedRules(cfg, file, lineByRaw)...)
 	out = append(out, lintIgnoredDirectives(cfg, file, lineByRaw)...)
+	out = append(out, lintProjectTrust(cfg, file, lineByRaw, gate)...)
 	out = append(out, lintTrustDirs(cfg, file, trustLine)...)
 	out = append(out, lintDeadStdinRules(cfg, file, lineByRaw)...)
 
@@ -204,13 +226,40 @@ func lintShadowedRules(cfg *config, file string, lineOf map[string]int) []findin
 	return out
 }
 
-// lintIgnoredDirectives flags project-tier trust/sandbox/returntype/stdin lines,
-// which are ignored (§4.2) — they can only loosen, so the project tier drops them.
+// lintIgnoredDirectives flags project-tier sandbox/returntype/stdin lines,
+// which are ignored (§4.2) — they can only loosen, so the project tier drops
+// them. Project trust lines get their own, more specific warning in lintProjectTrust.
 func lintIgnoredDirectives(cfg *config, file string, lineOf map[string]int) []finding {
 	var out []finding
 	for _, ln := range cfg.ignored {
+		if strings.HasPrefix(ln, "trust") {
+			continue
+		}
 		out = append(out, finding{file, lineOf[ln], levelWarn,
 			"directive ignored in project tier (global-tier only): " + ln})
+	}
+	return out
+}
+
+// lintProjectTrust warns on project-tier trust lines the loader will ignore:
+// malformed shape, gate off, or a dir that escapes the under-cwd fence.
+// Honored dirs land in cfg.trusted and get the usual missing-dir lint
+// (docs/RULES.md: project-trust).
+func lintProjectTrust(cfg *config, file string, lineOf map[string]int, gate string) []finding {
+	var out []finding
+	for _, ln := range cfg.ignored {
+		if !strings.HasPrefix(ln, "trust") {
+			continue
+		}
+		var msg string
+		if toks, err := parseRuleWords(ln); err != nil || len(toks) != 2 || toks[1].kind != tokLiteral {
+			msg = "project trust is ignored: malformed line (expected `trust <dir>`; a dir with spaces must be quoted)"
+		} else if gate != "under-cwd" {
+			msg = "project trust is ignored: the global project-trust gate is off"
+		} else {
+			msg = "project trust is ignored: the directory must resolve inside the project directory (under-cwd fence)"
+		}
+		out = append(out, finding{file, lineOf[ln], levelWarn, msg})
 	}
 	return out
 }

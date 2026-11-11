@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func findingAtLine(fs []finding, line int) (finding, bool) {
 func TestValidateClean(t *testing.T) {
 	dir := t.TempDir() // a real, existing trust dir -> no trust warning
 	body := "returntype decision\nsandbox nono\ntrust " + dir + "\nallow git status ANY\ndeny git push ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if errs, warns := countLevels(fs); errs != 0 || warns != 0 {
 		t.Errorf("clean config produced findings: %+v", fs)
 	}
@@ -48,7 +49,7 @@ func TestValidateClean(t *testing.T) {
 func TestValidateRequiresSandbox(t *testing.T) {
 	// Global tier without a sandbox directive is an error, mirroring loadConfig.
 	body := "trust /opt/x\nallow ls ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "must declare a sandbox directive") {
 		t.Errorf("expected missing-sandbox error: %+v", fs)
 	}
@@ -62,7 +63,7 @@ func TestValidateRequiresSandbox(t *testing.T) {
 		t.Error("missing sandbox should deny all")
 	}
 	// Project tier does not require it (directives are global-only there).
-	fs = validateFile(".shizo", body, true)
+	fs = validateFile(".shizo", body, true, "off", t.TempDir())
 	if hasMsg(fs, "must declare a sandbox directive") {
 		t.Errorf("project tier must not require sandbox: %+v", fs)
 	}
@@ -71,7 +72,7 @@ func TestValidateRequiresSandbox(t *testing.T) {
 func TestValidateReportsAllErrors(t *testing.T) {
 	// Two malformed lines (3 and 5); lines 1, 2 and 4 are fine.
 	body := "sandbox nono\nallow git status ANY\nwat is this\nallow ls ANY\nallow git ANY ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	errs, _ := countLevels(fs)
 	if errs != 2 {
 		t.Fatalf("want 2 errors, got %d: %+v", errs, fs)
@@ -86,7 +87,7 @@ func TestValidateReportsAllErrors(t *testing.T) {
 
 func TestValidateDeadRules(t *testing.T) {
 	body := "sandbox nono\nallow eval ANY\ndeny env ANY\nallow cd ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "unconditionally denied") {
 		t.Error("expected uncond-deny dead-rule warning")
 	}
@@ -100,7 +101,7 @@ func TestValidateDeadRules(t *testing.T) {
 
 func TestValidateShadow(t *testing.T) {
 	body := "sandbox nono\ndeny git push ANY\nallow git push --force\nallow git status ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "fully shadowed") {
 		t.Errorf("expected shadow warning: %+v", fs)
 	}
@@ -114,7 +115,7 @@ func TestValidateShadow(t *testing.T) {
 
 func TestValidateShadowedAsk(t *testing.T) {
 	body := "sandbox nono\ndeny git push ANY\nask git push --force\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "ask rule is fully shadowed") {
 		t.Errorf("expected shadow warning for ask rule: %+v", fs)
 	}
@@ -122,9 +123,13 @@ func TestValidateShadowedAsk(t *testing.T) {
 
 func TestValidateIgnoredDirectiveProjectTier(t *testing.T) {
 	body := "trust /opt/x\nreturntype automode\ndeny rm ANY\n"
-	fs := validateFile(".shizo", body, true)
+	fs := validateFile(".shizo", body, true, "off", t.TempDir())
 	if !hasMsg(fs, "directive ignored in project tier") {
 		t.Errorf("expected ignored-directive warnings: %+v", fs)
+	}
+	// The trust line gets its own, more specific warning (gate off).
+	if !hasMsg(fs, "project-trust gate is off") {
+		t.Errorf("expected project-trust gate warning: %+v", fs)
 	}
 	if errs, _ := countLevels(fs); errs != 0 {
 		t.Errorf("ignored directives should warn, not error: %+v", fs)
@@ -133,7 +138,7 @@ func TestValidateIgnoredDirectiveProjectTier(t *testing.T) {
 
 func TestValidateMissingTrustDir(t *testing.T) {
 	body := "sandbox nono\ntrust /definitely/not/here/xyz\nallow ls ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "does not exist") {
 		t.Errorf("expected missing trust-dir warning: %+v", fs)
 	}
@@ -193,18 +198,32 @@ func TestRunValidateExplicitPath(t *testing.T) {
 func TestRunValidateProjectFlagRoutes(t *testing.T) {
 	dir := t.TempDir()
 	f := writeFile(t, dir, "proj", "sandbox nono\ntrust /opt/x\ndeny rm ANY\n")
+	// Isolate the resolved global tier that supplies the project-trust gate.
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root)
 	var out, errOut bytes.Buffer
 	// As global tier the trust line is valid (dir missing -> warning, exit 0).
 	if rc := runValidate([]string{f}, &out, &errOut); rc != 0 {
 		t.Errorf("global-tier trust should not error: rc=%d %s", rc, out.String())
 	}
-	// With --project the trust line is an ignored-directive warning.
+	// With --project and the gate off (no global tier present) the trust line
+	// gets a gate-off warning.
 	out.Reset()
 	if rc := runValidate([]string{"--project", f}, &out, &errOut); rc != 0 {
 		t.Errorf("project-tier should exit 0: rc=%d %s", rc, out.String())
 	}
-	if !strings.Contains(out.String(), "ignored in project tier") {
-		t.Errorf("expected ignored-directive warning, got %q", out.String())
+	if !strings.Contains(out.String(), "project-trust gate is off") {
+		t.Errorf("expected gate-off warning, got %q", out.String())
+	}
+	// With the gate on in the installed global tier, /opt/x escapes the file's
+	// directory -> under-cwd fence warning.
+	writeFile(t, root, "global/rules", "sandbox nono\nproject-trust under-cwd\nallow ls ANY\n")
+	out.Reset()
+	if rc := runValidate([]string{"--project", f}, &out, &errOut); rc != 0 {
+		t.Errorf("project-tier should exit 0: rc=%d %s", rc, out.String())
+	}
+	if !strings.Contains(out.String(), "inside the project directory") {
+		t.Errorf("expected fence warning, got %q", out.String())
 	}
 }
 
@@ -230,7 +249,7 @@ func TestRunValidateInstalledMissingGlobal(t *testing.T) {
 
 func TestValidateStdinDirectiveIgnoredInProject(t *testing.T) {
 	body := "stdin deny\ndeny rm ANY\n"
-	fs := validateFile(".shizo", body, true)
+	fs := validateFile(".shizo", body, true, "off", t.TempDir())
 	if !hasMsg(fs, "directive ignored in project tier") {
 		t.Errorf("expected ignored stdin directive warning: %+v", fs)
 	}
@@ -238,7 +257,7 @@ func TestValidateStdinDirectiveIgnoredInProject(t *testing.T) {
 
 func TestValidateDeadStdinRules(t *testing.T) {
 	body := "stdin deny\nsandbox nono\nallow STDIN grep ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if !hasMsg(fs, "STDIN allow rule has no effect") {
 		t.Errorf("expected dead STDIN allow warning under stdin deny: %+v", fs)
 	}
@@ -247,7 +266,7 @@ func TestValidateDeadStdinRules(t *testing.T) {
 func TestValidateAskVerb(t *testing.T) {
 	dir := t.TempDir()
 	body := "sandbox nono\ntrust " + dir + "\nask rm HAS -rf\nallow rm ANY\n"
-	fs := validateFile("rules", body, false)
+	fs := validateFile("rules", body, false, "", "")
 	if errs, _ := countLevels(fs); errs != 0 {
 		t.Errorf("ask verb should be valid: %+v", fs)
 	}
@@ -264,5 +283,83 @@ func TestCheckTrustDir(t *testing.T) {
 	file := writeFile(t, dir, "afile", "x")
 	if msg, ok := checkTrustDir(file); ok || !strings.Contains(msg, "not a directory") {
 		t.Errorf("file should fail as non-dir: %q", msg)
+	}
+}
+
+func TestValidateProjectTrustGateOff(t *testing.T) {
+	body := "trust node_modules/.bin\n"
+	fs := validateFile(".shizo", body, true, "off", t.TempDir())
+	if !hasMsg(fs, "project-trust gate is off") {
+		t.Errorf("expected gate-off warning: %+v", fs)
+	}
+	if errs, _ := countLevels(fs); errs != 0 {
+		t.Errorf("warnings only: %+v", fs)
+	}
+}
+
+func TestValidateProjectTrustFence(t *testing.T) {
+	body := "trust /tmp/evil\n"
+	fs := validateFile(".shizo", body, true, "under-cwd", t.TempDir())
+	if !hasMsg(fs, "inside the project directory") {
+		t.Errorf("expected fence warning: %+v", fs)
+	}
+	if errs, _ := countLevels(fs); errs != 0 {
+		t.Errorf("warnings only: %+v", fs)
+	}
+}
+
+func TestValidateProjectTrustHonoredMissingDir(t *testing.T) {
+	dir := t.TempDir() // node_modules/.bin does not exist
+	body := "trust node_modules/.bin\n"
+	fs := validateFile(".shizo", body, true, "under-cwd", dir)
+	if !hasMsg(fs, "does not exist") {
+		t.Errorf("expected missing-dir warning: %+v", fs)
+	}
+}
+
+func TestValidateProjectTrustHonoredClean(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", ".bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "trust node_modules/.bin\n"
+	fs := validateFile(".shizo", body, true, "under-cwd", dir)
+	if errs, warns := countLevels(fs); errs != 0 || warns != 0 {
+		t.Errorf("expected no findings: %+v", fs)
+	}
+}
+
+func TestValidateProjectTrustMalformed(t *testing.T) {
+	body := "trust node_modules/.bin extra\n"
+	fs := validateFile(".shizo", body, true, "under-cwd", t.TempDir())
+	if !hasMsg(fs, "malformed") {
+		t.Errorf("expected malformed-line warning: %+v", fs)
+	}
+	if errs, _ := countLevels(fs); errs != 0 {
+		t.Errorf("warnings only: %+v", fs)
+	}
+}
+
+func TestRunValidateRelativeProjectFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root)
+	writeFile(t, root, "global/rules", "sandbox nono\nproject-trust under-cwd\nallow ls ANY\n")
+	projDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projDir, "node_modules", ".bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, projDir, ".shizo", "trust node_modules/.bin\n")
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if rc := runValidate([]string{"--project", ".shizo"}, &out, &errOut); rc != 0 {
+		t.Fatalf("rc=%d %s", rc, out.String())
+	}
+	if strings.Contains(out.String(), ": warning:") {
+		t.Errorf("an honored trust line given relatively must not warn: %s", out.String())
 	}
 }

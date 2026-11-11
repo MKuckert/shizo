@@ -7,8 +7,9 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
 1. **Read input.** Malformed hook JSON and a missing or empty command deny.
 2. **Load policy.** The global tier is required; the project tier is optional.
    Any unreadable or malformed present tier denies everything. Under `sandbox
-   nono`, each tier must match its attestation and the global trusted-`PATH`
-   snapshot must match the live environment.
+   nono`, each tier must match its attestation (a project tier's hash covers
+   its honored `trust` lines) and the global trusted-`PATH` snapshot must match
+   the live environment.
 3. **Check sandbox.** `sandbox nono` requires `NONO_CAP_FILE`. Only the global
    `sandbox dangerously-none` directive disables this check.
 4. **Parse Bash.** A `mvdan.cc/sh/v3/syntax` parse error denies with its source
@@ -38,7 +39,10 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
    spelling still denies.
 10. **Resolve commands.** Safe builtins are accepted directly. Other commands
     must resolve through inherited `PATH` or from `cwd` to an executable in a
-    trusted directory. The resolved absolute path is carried into step 11.
+    trusted directory. The trusted set is the global `trust` directories plus,
+    when the global `project-trust` gate is `under-cwd`, project-tier `trust`
+    directories that resolve inside the hook's `cwd`. The resolved absolute
+    path is carried into step 11.
 11. **Match rules.** The rule's command token is compared against the resolved
     path from step 10: a bare-name token matches by basename, an absolute token
     matches exactly. Global and project denies run first, then ask rules, then
@@ -48,8 +52,11 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
     `stdin` directive's value (`allow` by default).
 12. **Contain writes.** Redirect targets must be literal and stay below `cwd`,
     `$TMPDIR`, or `/tmp`; `/dev/null`, `/dev/stdout`, and `/dev/stderr` are also
-    valid. If the command list contains `cd`, all write redirects deny. Read
-    redirects and heredocs are unrestricted.
+    valid. If the command list contains `cd`, all write redirects deny. A
+    relative executable path after a `cd` in the same list denies for the same
+    reason — the working directory has changed, so it cannot be verified against
+    the hook's `cwd`. Absolute paths and commands before the `cd` are unaffected.
+    Read redirects and heredocs are unrestricted.
 13. **Aggregate and report.** Per-command results become one hook result and log
     record.
 

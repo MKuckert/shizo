@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -63,7 +64,7 @@ func TestProjectLooseningIgnored(t *testing.T) {
 	attestGlobal(t, dir, validGlobal)
 	projRules := "trust /evil/bin\nsandbox dangerously-none\nreturntype automode\ndeny rm ANY\n"
 	proj := writeFile(t, dir, ".shizo", projRules)
-	attestProject(t, dir, proj, projRules)
+	attestProject(t, dir, proj, projRules, "off")
 	cfg := loadConfig(g, proj, installRoot())
 	if cfg.denyAll {
 		t.Fatal("project loosening should be ignored, not deny-all")
@@ -267,7 +268,7 @@ func TestStdinDirective(t *testing.T) {
 	projDir := t.TempDir()
 	projBody := "stdin deny\ndeny rm ANY\n"
 	proj := writeFile(t, projDir, ".shizo", projBody)
-	attestProject(t, dir, proj, projBody)
+	attestProject(t, dir, proj, projBody, "off")
 	cfg = loadConfig(g, proj, installRoot())
 	if cfg.denyAll {
 		t.Fatal("project stdin should be ignored: " + cfg.denyReason)
@@ -277,5 +278,191 @@ func TestStdinDirective(t *testing.T) {
 	}
 	if len(cfg.ignored) != 1 {
 		t.Errorf("expected 1 ignored directive, got %v", cfg.ignored)
+	}
+}
+
+func TestProjectTrustDirective(t *testing.T) {
+	dir := t.TempDir()
+
+	// Absent: defaults to off.
+	body := "sandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "a/rules", body)
+	attestGlobal(t, dir, body)
+	if cfg := loadConfig(g, "", installRoot()); cfg.denyAll || cfg.projectTrust != "off" {
+		t.Errorf("absent project-trust should default to off: %+v", cfg)
+	}
+
+	for _, mode := range []string{"off", "under-cwd"} {
+		body := "project-trust " + mode + "\nsandbox nono\nallow ls ANY\n"
+		g := writeFile(t, dir, "b/rules", body)
+		attestGlobal(t, dir, body)
+		if cfg := loadConfig(g, "", installRoot()); cfg.denyAll || cfg.projectTrust != mode {
+			t.Errorf("project-trust %s: %+v", mode, cfg)
+		}
+	}
+
+	for name, body := range map[string]string{
+		"unknown value": "project-trust anywhere\nsandbox nono\n",
+		"duplicate":     "project-trust off\nproject-trust under-cwd\nsandbox nono\n",
+		"after rule":    "sandbox nono\nallow ls ANY\nproject-trust under-cwd\n",
+	} {
+		g := writeFile(t, dir, "c/rules", body)
+		if cfg := loadConfig(g, "", installRoot()); !cfg.denyAll {
+			t.Errorf("%s should deny all: %+v", name, cfg)
+		}
+	}
+}
+
+func TestProjectTrustDirectiveIgnoredInProjectTier(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+	projDir := t.TempDir()
+	projBody := "project-trust under-cwd\ndeny rm ANY\n"
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if len(cfg.ignored) != 1 || !strings.Contains(cfg.ignored[0], "project-trust") {
+		t.Errorf("a project project-trust line should be ignored and logged: %+v", cfg.ignored)
+	}
+}
+
+func TestProjectTrustHonoredWithinCwd(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	abs := filepath.Join(projDir, "node_modules", ".bin")
+
+	for _, line := range []string{"trust node_modules/.bin", "trust " + abs} {
+		projBody := line + "\n"
+		proj := writeFile(t, projDir, ".shizo", projBody)
+		attestProject(t, dir, proj, projBody, "under-cwd")
+		cfg := loadConfig(g, proj, installRoot())
+		if cfg.denyAll {
+			t.Fatalf("%s: %s", line, cfg.denyReason)
+		}
+		if len(cfg.trusted) != 1 || cfg.trusted[0] != abs {
+			t.Errorf("%s: trusted = %+v, want [%s]", line, cfg.trusted, abs)
+		}
+		if len(cfg.ignored) != 0 {
+			t.Errorf("%s: ignored = %+v", line, cfg.ignored)
+		}
+	}
+}
+
+func TestProjectTrustGateOffIgnores(t *testing.T) {
+	dir := t.TempDir()
+	body := "sandbox nono\nallow ls ANY\n" // gate defaults to off
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n" // within cwd, but the gate is off
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "off")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if len(cfg.trusted) != 0 {
+		t.Errorf("gate off: trusted = %+v", cfg.trusted)
+	}
+	if len(cfg.ignored) != 1 {
+		t.Errorf("gate off: ignored = %+v", cfg.ignored)
+	}
+}
+
+func TestProjectTrustEscapesIgnored(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	cases := []string{
+		"trust /tmp/evil",                       // absolute, outside
+		"trust ../sibling/bin",                  // relative escape
+		"trust node_modules/.bin/../../../evil", // dot-dot escape
+	}
+	for _, line := range cases {
+		projBody := line + "\n"
+		proj := writeFile(t, projDir, ".shizo", projBody)
+		attestProject(t, dir, proj, projBody, "under-cwd")
+		cfg := loadConfig(g, proj, installRoot())
+		if cfg.denyAll {
+			t.Fatalf("%s: %s", line, cfg.denyReason)
+		}
+		if len(cfg.trusted) != 0 {
+			t.Errorf("%s: escaped dir must not be trusted: %+v", line, cfg.trusted)
+		}
+		if len(cfg.ignored) != 1 {
+			t.Errorf("%s: ignored = %+v", line, cfg.ignored)
+		}
+	}
+}
+
+func TestProjectTrustDotHonorsRoot(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	projBody := "trust .\n" // the project directory itself stays inside the fence
+	proj := writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, proj, projBody, "under-cwd")
+	cfg := loadConfig(g, proj, installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	if len(cfg.trusted) != 1 || cfg.trusted[0] != projDir {
+		t.Errorf("trusted = %+v, want [%s]", cfg.trusted, projDir)
+	}
+}
+
+func TestProjectTrustRelativeProjectPath(t *testing.T) {
+	dir := t.TempDir()
+	body := "project-trust under-cwd\nsandbox nono\nallow ls ANY\n"
+	g := writeFile(t, dir, "rules", body)
+	attestGlobal(t, dir, body)
+
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n"
+	writeFile(t, projDir, ".shizo", projBody)
+	attestProject(t, dir, filepath.Join(projDir, ".shizo"), projBody, "under-cwd")
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadConfig(g, ".shizo", installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+	want := filepath.Join(projDir, "node_modules", ".bin")
+	if len(cfg.trusted) != 1 || cfg.trusted[0] != want {
+		t.Errorf("relative project path: trusted = %+v, want [%s]", cfg.trusted, want)
+	}
+}
+
+// A project file at the filesystem root (/.shizo) fences against "/"; relative
+// and absolute spellings of a root-level dir must both be honored.
+func TestProjectTrustRootBaseDir(t *testing.T) {
+	for _, line := range []string{"trust bin", "trust /bin"} {
+		norm, reason, ok := normalizeTier(line+"\n", true, "under-cwd", "/")
+		if !ok {
+			t.Fatalf("%s: %s", line, reason)
+		}
+		if len(norm.trusted) != 1 || norm.trusted[0] != "/bin" {
+			t.Errorf("%s: trusted = %+v, want [/bin]", line, norm.trusted)
+		}
 	}
 }

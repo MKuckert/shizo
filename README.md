@@ -149,7 +149,9 @@ Also, file changes made through `Bash` tool are not safely reversible by `/rewin
 Rules are inert, line-oriented argv patterns. `ANY` matches zero or more tokens;
 `HAS` finds one flag after a literal prefix. Denies override allows, and an
 unmatched command produces `ask`. Directives that can loosen policy (`trust`,
-`sandbox`, and `returntype`) are global-only. See [`docs/RULES.md`](docs/RULES.md).
+`sandbox`, and `returntype`) are global-only; a project may add trusted
+directories inside its own tree when the global `project-trust` gate is
+`under-cwd`. See [`docs/RULES.md`](docs/RULES.md).
 
 ## Operator commands
 
@@ -166,7 +168,8 @@ shizo validate --project FILE  # file treated as a project tier
 `validate` reports all syntax errors and semantic warnings. Its output is
 `file:line: error|warning: message`; exit codes are 0 for no errors, 1 for
 errors, and 2 for bad usage. Warnings cover duplicates, dead or shadowed rules,
-missing trust directories, and ignored project directives.
+missing trust directories, and ignored project directives (including `trust`
+lines the gate or fence drops).
 
 ### Attest rules
 

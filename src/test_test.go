@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -56,7 +58,7 @@ func TestTestCwdPicksProjectTier(t *testing.T) {
 	proj := t.TempDir()
 	projBody := "deny git status ANY\n"
 	projPath := writeFile(t, proj, ".shizo", projBody)
-	attestProject(t, installRoot(), projPath, projBody)
+	attestProject(t, installRoot(), projPath, projBody, "off")
 
 	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", proj, "git", "status")
 	if rc != 2 || !strings.Contains(out, "decision: deny") {
@@ -136,5 +138,31 @@ func TestTestHelp(t *testing.T) {
 	rc, out, _ := test(t, "", "--assume-sandboxed", "git", "status", "-h")
 	if rc != 0 || !strings.Contains(out, "decision:") || strings.Contains(out, "usage: shizo test") {
 		t.Errorf("trailing -h should test the command, not print usage: rc=%d out=%q", rc, out)
+	}
+}
+
+// A relative --cwd must behave like the hook's absolute cwd: the project
+// tier's fence base and slash-path resolution both need it absolute.
+func TestTestRelativeCwdHonorsProjectTrust(t *testing.T) {
+	setupTest(t, "project-trust under-cwd\nallow dep-cli ANY\n")
+	proj := t.TempDir()
+	binDir := filepath.Join(proj, "node_modules", ".bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mkExe(t, binDir, "dep-cli")
+	projBody := "trust node_modules/.bin\n"
+	projPath := writeFile(t, proj, ".shizo", projBody)
+	attestProject(t, installRoot(), projPath, projBody, "under-cwd")
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(proj); err != nil {
+		t.Fatal(err)
+	}
+
+	rc, out, _ := test(t, "", "--assume-sandboxed", "--cwd", ".", "node_modules/.bin/dep-cli", "build")
+	if rc != 0 || !strings.Contains(out, "decision: allow") {
+		t.Errorf("relative --cwd should honor project trust: rc=%d out=%q", rc, out)
 	}
 }

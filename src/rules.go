@@ -15,6 +15,7 @@ type config struct {
 	returnMode   string // "decision" (default) or "automode"
 	sandboxMode  string // "nono" or "dangerously-none" — required in the global tier, no default
 	stdinDefault string // "allow" (default), "ask", or "deny"
+	projectTrust string // "off" (default) or "under-cwd" — global gate for project-tier trust
 	allowRules   []rule
 	denyRules    []rule
 	askRules     []rule
@@ -24,7 +25,7 @@ type config struct {
 }
 
 func denyAllConfig(reason string) *config {
-	return &config{returnMode: "decision", denyAll: true, denyReason: reason}
+	return &config{returnMode: "decision", projectTrust: "off", denyAll: true, denyReason: reason}
 }
 
 // euidFn is the effective-UID source, overridable in tests.
@@ -44,13 +45,21 @@ func rootBlocksNono(euid int, mode string) string {
 // PATH that no longer matches the attested trust-dir snapshot) also yields
 // deny-all — see attest_verify.go and plans/drafts/PLAN-rule-attestation.md.
 func loadConfig(globalPath, projectPath, root string) *config {
-	cfg := &config{returnMode: "decision"}
+	cfg := &config{returnMode: "decision", projectTrust: "off"}
+
+	// The project tier's fence base is its directory; a relative path would make
+	// it "." and within() would reject every subdir, so resolve it first.
+	if projectPath != "" {
+		if abs, err := filepath.Abs(projectPath); err == nil {
+			projectPath = abs
+		}
+	}
 
 	globalData, err := os.ReadFile(globalPath)
 	if err != nil {
 		return denyAllConfig("global rules unreadable (" + globalPath + "): " + err.Error())
 	}
-	if reason, ok := parseTier(cfg, string(globalData), false); !ok {
+	if reason, ok := parseTier(cfg, string(globalData), false, "", ""); !ok {
 		return denyAllConfig(reason)
 	}
 	// sandbox is required in the global tier — absence fails closed (§3).
@@ -68,7 +77,11 @@ func loadConfig(globalPath, projectPath, root string) *config {
 		if err == nil {
 			projectPresent = true
 			projectData = data
-			if reason, ok := parseTier(cfg, string(data), true); !ok {
+			// The project tier's fence base is its own directory: the hook only
+			// ever loads <cwd>/.shizo, so that directory is the cwd the fence
+			// applies to (docs/RULES.md: project-trust).
+			if reason, ok := parseTier(cfg, string(data), true, cfg.projectTrust,
+				filepath.Dir(filepath.Clean(projectPath))); !ok {
 				return denyAllConfig(reason)
 			}
 		} else if !os.IsNotExist(err) {
@@ -83,7 +96,7 @@ func loadConfig(globalPath, projectPath, root string) *config {
 	// dangerously-none: attestation adds latency for zero security value —
 	// without a sandbox the agent can rewrite both rules and records.
 	if cfg.sandboxMode != "dangerously-none" {
-		if reason := verifyAttestation(globalData, projectPath, projectData, projectPresent, root); reason != "" {
+		if reason := verifyAttestation(cfg, globalData, projectPath, projectData, projectPresent, root); reason != "" {
 			return denyAllConfig(reason)
 		}
 	}
@@ -96,7 +109,7 @@ func loadConfig(globalPath, projectPath, root string) *config {
 // tier is present, its record also matches and the live normalized-PATH still
 // matches the global record's snapshot. No project file -> nothing to verify
 // for it (§ of the plan: "No project file ⇒ nothing to attest").
-func verifyAttestation(globalData []byte, projectPath string, projectData []byte, projectPresent bool, root string) string {
+func verifyAttestation(cfg *config, globalData []byte, projectPath string, projectData []byte, projectPresent bool, root string) string {
 	// Probe store writability before trusting any records. Only meaningful
 	// inside the sandbox — outside it (tests, operator commands) everything
 	// is writable regardless of the profile.
@@ -108,7 +121,7 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 		}
 	}
 
-	gNorm, reason, ok := normalizeTier(string(globalData), false)
+	gNorm, reason, ok := normalizeTier(string(globalData), false, "", "")
 	if !ok {
 		return "global rules failed to normalize for attestation: " + reason
 	}
@@ -130,7 +143,9 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 	if err != nil {
 		return "project rules path: " + err.Error()
 	}
-	pNorm, reason, ok := normalizeTier(string(projectData), true)
+	// The project canonical must honor the same gate and fence the loader used,
+	// or an attacker-added trust line would fall outside the attested hash.
+	pNorm, reason, ok := normalizeTier(string(projectData), true, cfg.projectTrust, filepath.Dir(abs))
 	if !ok {
 		return "project rules failed to normalize for attestation: " + reason
 	}
@@ -141,25 +156,56 @@ func verifyAttestation(globalData []byte, projectPath string, projectData []byte
 	return checkRecord("project", pNorm, pRecord)
 }
 
+// projectTrustGateFor parses the resolved global tier and returns its
+// project-trust mode. Unreadable or malformed content yields "off" (fail-closed:
+// an attested canonical never covers a dir the live loader would ignore).
+func projectTrustGateFor(globalPath string) string {
+	data, err := os.ReadFile(globalPath)
+	if err != nil {
+		return "off"
+	}
+	cfg := &config{returnMode: "decision", projectTrust: "off"}
+	if _, ok := parseTier(cfg, string(data), false, "", ""); !ok {
+		return "off"
+	}
+	return cfg.projectTrust
+}
+
+// projectTrustDir resolves a project-tier trust argument against baseDir and
+// reports whether it stays inside the under-cwd fence (docs/RULES.md:
+// project-trust).
+func projectTrustDir(arg, baseDir string) (string, bool) {
+	dir := arg
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(baseDir, dir)
+	} else {
+		dir = filepath.Clean(dir)
+	}
+	return dir, within(dir, baseDir)
+}
+
 // tierState carries the per-file "seen" flags across parseLine calls: rules must
-// follow directives, and returntype/sandbox/stdin may appear at most once.
+// follow directives, and returntype/sandbox/stdin/project-trust may appear at most once.
 type tierState struct {
-	sawRule       bool
-	sawReturntype bool
-	sawSandbox    bool
-	sawStdin      bool
+	sawRule         bool
+	sawReturntype   bool
+	sawSandbox      bool
+	sawStdin        bool
+	sawProjectTrust bool
 }
 
 // parseTier folds one rules file into cfg. Returns (reason, false) on the first
-// malformed line (fail-closed §2 step 2). project restricts loosening directives.
-func parseTier(cfg *config, content string, project bool) (string, bool) {
+// malformed line (fail-closed §2 step 2). project restricts loosening directives;
+// gate and baseDir are the global project-trust mode and the project rules file's
+// directory, used only for a project tier's trust lines.
+func parseTier(cfg *config, content string, project bool, gate, baseDir string) (string, bool) {
 	var st tierState
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		if reason, ok := parseLine(cfg, trimmed, project, &st); !ok {
+		if reason, ok := parseLine(cfg, trimmed, project, &st, gate, baseDir); !ok {
 			return reason, false
 		}
 	}
@@ -169,8 +215,9 @@ func parseTier(cfg *config, content string, project bool) (string, bool) {
 // parseLine folds one non-blank, non-comment rule line into cfg, updating st.
 // Returns (reason, false) on a malformed or misplaced line. Pure over cfg/st —
 // both the fail-closed loader (parseTier) and the validator (validateTier) drive
-// it, so its verdict is identical in both.
-func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string, bool) {
+// it, so its verdict is identical in both. gate/baseDir apply to a project tier's
+// trust lines only (docs/RULES.md: project-trust).
+func parseLine(cfg *config, trimmed string, project bool, st *tierState, gate, baseDir string) (string, bool) {
 	toks, err := parseRuleWords(trimmed)
 	if err != nil {
 		return "malformed rule line: " + trimmed + " (" + err.Error() + ")", false
@@ -187,6 +234,15 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string
 	switch head.text {
 	case "trust":
 		if project {
+			// Under the global `project-trust under-cwd` gate a project trust dir
+			// is honored when it resolves inside the project directory; anything
+			// else (gate off, escaping dir, malformed line) is ignored and logged.
+			if gate == "under-cwd" && len(toks) == 2 && toks[1].kind == tokLiteral {
+				if dir, ok := projectTrustDir(toks[1].text, baseDir); ok {
+					cfg.trusted = append(cfg.trusted, dir)
+					return "", true
+				}
+			}
 			cfg.ignored = append(cfg.ignored, trimmed)
 			return "", true
 		}
@@ -197,6 +253,24 @@ func parseLine(cfg *config, trimmed string, project bool, st *tierState) (string
 			return "trust needs one absolute directory: " + trimmed, false
 		}
 		cfg.trusted = append(cfg.trusted, toks[1].text)
+
+	case "project-trust":
+		if project {
+			cfg.ignored = append(cfg.ignored, trimmed)
+			return "", true
+		}
+		if st.sawRule {
+			return "directive after rules: " + trimmed, false
+		}
+		if st.sawProjectTrust {
+			return "duplicate project-trust: " + trimmed, false
+		}
+		if len(toks) != 2 || toks[1].kind != tokLiteral ||
+			(toks[1].text != "off" && toks[1].text != "under-cwd") {
+			return "project-trust must be off or under-cwd: " + trimmed, false
+		}
+		cfg.projectTrust = toks[1].text
+		st.sawProjectTrust = true
 
 	case "returntype":
 		if project {
