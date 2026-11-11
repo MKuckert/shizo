@@ -52,8 +52,11 @@ is defined by [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md).
     `stdin` directive's value (`allow` by default).
 12. **Contain writes.** Redirect targets must be literal and stay below `cwd`,
     `$TMPDIR`, or `/tmp`; `/dev/null`, `/dev/stdout`, and `/dev/stderr` are also
-    valid. If the command list contains `cd`, all write redirects deny. Read
-    redirects and heredocs are unrestricted.
+    valid. If the command list contains `cd`, all write redirects deny. A
+    relative executable path after a `cd` in the same list denies for the same
+    reason — the working directory has changed, so it cannot be verified against
+    the hook's `cwd`. Absolute paths and commands before the `cd` are unaffected.
+    Read redirects and heredocs are unrestricted.
 13. **Aggregate and report.** Per-command results become one hook result and log
     record.
 

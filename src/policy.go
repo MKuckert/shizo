@@ -138,6 +138,16 @@ func decideCommand(cmd extractedCmd, cfg *config, cwd string, env environ,
 		return
 	}
 
+	// 'cd' changes the working directory, so a relative executable path after it
+	// would resolve against a cwd we cannot statically verify (the same reason
+	// step 12 denies write redirects when 'cd' is present). Absolute paths are
+	// unaffected; commands before the cd still resolve against the hook cwd.
+	if *cdPresent && strings.ContainsRune(name, '/') && !filepath.IsAbs(name) {
+		cl.Decision = kindDeny.String()
+		*out = escalate(*out, Outcome{kindDeny, "relative executable path denied because 'cd' changes the working directory"})
+		return
+	}
+
 	res := resolveCommand(name, cfg.trusted, cwd, env.path) // step 10
 	if res.builtin {
 		if base == "cd" {
@@ -224,5 +234,10 @@ func within(path, base string) bool {
 		return false
 	}
 	base = filepath.Clean(base)
+	if base == string(os.PathSeparator) {
+		// Root base: every absolute path is inside; Clean(base)+"/" would be
+		// "//", which no path carries as a prefix.
+		return strings.HasPrefix(path, base)
+	}
 	return path == base || strings.HasPrefix(path, base+string(os.PathSeparator))
 }

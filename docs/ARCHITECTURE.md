@@ -114,8 +114,12 @@ that can edit both policy and records makes verification meaningless.
   lexical, like the global trust dirs: a trusted dir may be a symlink
   resolving outside the project tree, and binaries reached through it execute.
   The operator opts into this per machine via the global gate — leaving it
-  `off` restores the old behavior — and can keep the blast radius small by not
-  explicitly `allow`ing repo-local binaries, so they fall back to `ask`.
+  `off` restores the old behavior. Bare-name allow rules match by basename, so
+  an existing global allow (the starter's `allow git status ANY`) also matches
+  a same-named binary in a project-trusted dir; the absence of repo-local allow
+  rules does not confine execution to system tools. To keep the blast radius
+  small, write allow rules with absolute paths (`allow /usr/bin/git status
+  ANY`) or leave the gate `off`.
 - Write containment admits any redirect below `cwd`, so an allowed `echo` can
   rewrite `.git/config` or `.claude/settings.json` unless the sandbox keeps them
   read-only. A writable workspace turns auto-allowed `git` subcommands into

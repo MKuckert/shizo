@@ -452,3 +452,17 @@ func TestProjectTrustRelativeProjectPath(t *testing.T) {
 		t.Errorf("relative project path: trusted = %+v, want [%s]", cfg.trusted, want)
 	}
 }
+
+// A project file at the filesystem root (/.shizo) fences against "/"; relative
+// and absolute spellings of a root-level dir must both be honored.
+func TestProjectTrustRootBaseDir(t *testing.T) {
+	for _, line := range []string{"trust bin", "trust /bin"} {
+		norm, reason, ok := normalizeTier(line+"\n", true, "under-cwd", "/")
+		if !ok {
+			t.Fatalf("%s: %s", line, reason)
+		}
+		if len(norm.trusted) != 1 || norm.trusted[0] != "/bin" {
+			t.Errorf("%s: trusted = %+v, want [/bin]", line, norm.trusted)
+		}
+	}
+}

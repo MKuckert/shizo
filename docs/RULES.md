@@ -49,7 +49,10 @@ relative — it is resolved against that directory — so `trust node_modules/.b
 needs no absolute path. Any other project `trust` line (gate off, or a dir that
 escapes the directory) is ignored and logged. A trusted dir alone allows
 nothing: commands from it still need an allow rule, still lose to any deny, and
-still hit the unconditional denials.
+still hit the unconditional denials. Note that bare-name allow rules match by
+basename — an existing global `allow git status ANY` also matches a binary
+named `git` in a project-trusted dir, so the gate does not isolate repo-local
+tools from your global allows.
 
 ### `project-trust <off|under-cwd>`
 
