@@ -63,7 +63,15 @@ func canonicalizeTier(cfg *config, project bool) string {
 	}
 	trusted := append([]string{}, cfg.trusted...)
 	sort.Strings(trusted)
+	// Dedupe: repeated trust lines (or equivalent spellings of the same dir,
+	// which parseLine cleans to one path) must not change the hash.
+	dedup := trusted[:0:0]
 	for _, t := range trusted {
+		if len(dedup) == 0 || dedup[len(dedup)-1] != t {
+			dedup = append(dedup, t)
+		}
+	}
+	for _, t := range dedup {
 		lines = append(lines, "trust "+t)
 	}
 	lines = append(lines, sortedRuleLines(cfg.allowRules)...)

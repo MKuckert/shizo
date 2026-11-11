@@ -439,3 +439,49 @@ func TestRunAttestProjectTrustGateOff(t *testing.T) {
 		t.Errorf("gate off: record must not attest the trust line:\n%s", recData)
 	}
 }
+
+func TestProjectTrustDuplicateTrustLinesStableHash(t *testing.T) {
+	base := t.TempDir()
+	one, _, ok1 := normalizeTier("trust node_modules/.bin\n", true, "under-cwd", base)
+	both, _, ok2 := normalizeTier("trust node_modules/.bin\ntrust ./node_modules/.bin\n", true, "under-cwd", base)
+	if !ok1 || !ok2 {
+		t.Fatalf("normalize failed")
+	}
+	if one.canonical != both.canonical {
+		t.Errorf("duplicate/equivalent-spelling trust lines must hash identically:\n%s\nvs\n%s", one.canonical, both.canonical)
+	}
+}
+
+func TestRunAttestRelativeProjectFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SHIZO_DIR", root)
+	body := "project-trust under-cwd\nsandbox nono\nallow git status ANY\n"
+	g := writeFile(t, root, "global/rules", body)
+	attestGlobal(t, root, body)
+
+	projDir := t.TempDir()
+	projBody := "trust node_modules/.bin\n"
+	writeFile(t, projDir, ".shizo", projBody)
+
+	old, _ := os.Getwd()
+	defer os.Chdir(old)
+	if err := os.Chdir(projDir); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if rc := runAttest([]string{".shizo"}, &out, &errb); rc != 0 {
+		t.Fatalf("runAttest relative: rc=%d %s", rc, errb.String())
+	}
+	recData, err := os.ReadFile(projectAttestPath(root, filepath.Join(projDir, ".shizo")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "trust " + filepath.Join(projDir, "node_modules", ".bin")
+	if !strings.Contains(string(recData), want) {
+		t.Errorf("record should attest the honored trust line %q:\n%s", want, recData)
+	}
+	cfg := loadConfig(g, filepath.Join(projDir, ".shizo"), installRoot())
+	if cfg.denyAll {
+		t.Fatal(cfg.denyReason)
+	}
+}
