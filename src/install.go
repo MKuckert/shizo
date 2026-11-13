@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,9 +23,10 @@ usage: shizo install claude-hook [--project | --local | --global]
        shizo install pi-extension [--project | --global]
 
 claude-hook registers the shizo.sh wrapper as a PreToolUse/Bash hook in a
-Claude Code settings file, merging into whatever is already there.
-pi-extension symlinks the installed pi extension (engine/shizo-pi.ts) into
-pi's extension directory (docs/PI.md); it never overwrites a different file.
+Claude Code settings file, merging into whatever is already there; it writes
+the wrapper next to the binary from the embedded source if missing.
+pi-extension copies the embedded pi extension into pi's extension directory
+(docs/PI.md); it never overwrites a different file.
 
 Flags:
   --project   claude-hook: .claude/settings.json in the cwd (default)
@@ -84,7 +86,7 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 		target = filepath.Join(".claude", "settings.json")
 	}
 
-	cmd, err := wrapperPath()
+	cmd, err := ensureWrapper()
 	if err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
@@ -114,13 +116,12 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// wrapperPath is the shizo.sh next to the running binary. We register the
-// wrapper, never the binary (docs/CLAUDE_CODE_HOOKS.md), and refuse to write
-// a dangling hook.
-func wrapperPath() (string, error) { return siblingOfExe("shizo.sh", "wrapper") }
-
-// siblingOfExe resolves a file installed next to the running binary.
-func siblingOfExe(name, label string) (string, error) {
+// ensureWrapper resolves the shizo.sh next to the running binary, writing it
+// from the embedded source if missing. We register the wrapper, never the
+// binary (docs/CLAUDE_CODE_HOOKS.md). A present file that differs from the
+// embedded source is refused, never overwritten: an operator may have patched
+// it.
+func ensureWrapper() (string, error) {
 	exe, err := installExe()
 	if err != nil {
 		return "", fmt.Errorf("cannot locate the shizo binary: %w", err)
@@ -128,39 +129,77 @@ func siblingOfExe(name, label string) (string, error) {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	p := filepath.Join(filepath.Dir(exe), name)
-	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("%s not found at %s — run `make install` first", label, p)
+	p := filepath.Join(filepath.Dir(exe), "shizo.sh")
+	cur, err := os.ReadFile(p)
+	switch {
+	case os.IsNotExist(err):
+		if err := os.WriteFile(p, embeddedWrapper, 0o644); err != nil {
+			return "", fmt.Errorf("cannot write wrapper %s: %w", p, err)
+		}
+		// WriteFile's mode is umask-masked; the hook needs the exec bit.
+		if err := os.Chmod(p, 0o755); err != nil {
+			return "", fmt.Errorf("cannot make wrapper %s executable: %w", p, err)
+		}
+	case err != nil:
+		return "", fmt.Errorf("cannot read wrapper %s: %w", p, err)
+	default:
+		if !bytes.Equal(cur, embeddedWrapper) {
+			return "", fmt.Errorf("%s differs from the wrapper built into this binary — review and remove it first", p)
+		}
+		if fi, err := os.Stat(p); err == nil && fi.Mode().Perm()&0o100 == 0 {
+			// Our own content, exec bit lost: restore it rather than register
+			// a wrapper the hook cannot spawn.
+			if err := os.Chmod(p, 0o755); err != nil {
+				return "", fmt.Errorf("cannot make wrapper %s executable: %w", p, err)
+			}
+		}
 	}
 	return p, nil
 }
 
-// installPiExtension symlinks the engine's shizo-pi.ts into pi's extension
-// directory (docs/PI.md). Idempotent; a different existing file or link is an
-// error, never an overwrite.
+// installPiExtension copies the embedded pi extension into pi's extension
+// directory (docs/PI.md). Idempotent: an identical regular file is left
+// alone; a different existing file is refused, never overwritten. Stale
+// symlinks from older installs are replaced by the regular copy so they
+// cannot dangle once engine/shizo-pi.ts is gone.
 func installPiExtension(global bool, stdout, stderr io.Writer) int {
-	src, err := siblingOfExe("shizo-pi.ts", "pi extension")
-	if err != nil {
-		fmt.Fprintf(stderr, "install: %v\n", err)
-		return 1
-	}
 	target := filepath.Join(".pi", "extensions", "shizo.ts")
 	if global {
 		target = filepath.Join(os.Getenv("HOME"), ".pi", "agent", "extensions", "shizo.ts")
 	}
-	if cur, err := os.Readlink(target); err == nil && cur == src {
-		fmt.Fprintf(stdout, "already installed -> %s\n", target)
-		return 0
-	}
-	if _, err := os.Lstat(target); err == nil {
-		fmt.Fprintf(stderr, "install: %s already exists and is not the shizo extension — fix or move it first\n", target)
-		return 1
+	cur, err := os.ReadFile(target)
+	if !os.IsNotExist(err) {
+		if err != nil {
+			fmt.Fprintf(stderr, "install: %s already exists — fix or move it first\n", target)
+			return 1
+		}
+		if !bytes.Equal(cur, embeddedPiExtension) {
+			fmt.Fprintf(stderr, "install: %s already exists with different content — fix or move it first\n", target)
+			return 1
+		}
+		fi, lerr := os.Lstat(target)
+		if lerr != nil || fi.Mode()&os.ModeSymlink == 0 {
+			fmt.Fprintf(stdout, "already installed -> %s\n", target)
+			return 0
+		}
+		// Identical content behind a symlink: migrate to a regular file below.
+		if err := os.Remove(target); err != nil {
+			fmt.Fprintf(stderr, "install: %v\n", err)
+			return 1
+		}
+	} else if _, lerr := os.Lstat(target); lerr == nil {
+		// A broken symlink: ReadFile saw IsNotExist, but WriteFile would not
+		// replace it — remove it first.
+		if err := os.Remove(target); err != nil {
+			fmt.Fprintf(stderr, "install: %v\n", err)
+			return 1
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}
-	if err := os.Symlink(src, target); err != nil {
+	if err := os.WriteFile(target, embeddedPiExtension, 0o644); err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}

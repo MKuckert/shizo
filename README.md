@@ -69,6 +69,8 @@ shizo install claude-hook --local    # <cwd>/.claude/settings.local.json
 shizo install claude-hook --global   # ~/.claude/settings.json
 ```
 
+The wrapper and the pi extension ship embedded in the binary, so `shizo
+install` works from a bare release download without a source checkout.
 The entry is merged into whatever the settings file already contains; a
 re-run is a no-op, and a file that is not valid JSON is refused rather than
 overwritten. The result is:
