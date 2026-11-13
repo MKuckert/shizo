@@ -6,22 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
-// fakeWrapper installs a stub shizo.sh in a temp dir and points installExe at
-// a sibling binary path, so runInstall resolves a real wrapper.
-func fakeWrapper(t *testing.T) string {
+// fakeEngine points installExe at a binary path in an empty temp dir, so the
+// install materializes its files there. Returns the engine dir.
+func fakeEngine(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	wrapper := filepath.Join(dir, "shizo.sh")
-	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	old := installExe
 	installExe = func() (string, error) { return filepath.Join(dir, "shizo"), nil }
 	t.Cleanup(func() { installExe = old })
-	return wrapper
+	return dir
 }
 
 func runInstallIn(t *testing.T, cwd string, args ...string) (int, string, string) {
@@ -146,7 +143,8 @@ func TestInstallClaudeHook(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			wrapper := fakeWrapper(t)
+			engine := fakeEngine(t)
+			wrapper := filepath.Join(engine, "shizo.sh")
 			cwd := t.TempDir()
 			path := filepath.Join(cwd, ".claude", "settings.json")
 			existing := strings.ReplaceAll(tc.existing, "{{WRAPPER}}", wrapper)
@@ -222,7 +220,7 @@ func TestInstallTargetPaths(t *testing.T) {
 		{"--local", ".claude/settings.local.json"},
 	} {
 		t.Run(tc.flag, func(t *testing.T) {
-			fakeWrapper(t)
+			fakeEngine(t)
 			cwd := t.TempDir()
 			if code, _, errs := runInstallIn(t, cwd, "claude-hook", tc.flag); code != 0 {
 				t.Fatalf("exit = %d: %s", code, errs)
@@ -234,7 +232,7 @@ func TestInstallTargetPaths(t *testing.T) {
 	}
 
 	t.Run("--global", func(t *testing.T) {
-		fakeWrapper(t)
+		fakeEngine(t)
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 		if code, _, errs := runInstallIn(t, t.TempDir(), "claude-hook", "--global"); code != 0 {
@@ -246,36 +244,77 @@ func TestInstallTargetPaths(t *testing.T) {
 	})
 }
 
-// A missing wrapper must fail rather than register a dangling hook command.
-func TestInstallMissingWrapper(t *testing.T) {
-	dir := t.TempDir()
-	old := installExe
-	installExe = func() (string, error) { return filepath.Join(dir, "shizo"), nil }
-	t.Cleanup(func() { installExe = old })
-
+// A missing wrapper is written from the embedded source (executable) before
+// the hook is registered — no source file on disk is required.
+func TestInstallMaterializesWrapper(t *testing.T) {
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
 	cwd := t.TempDir()
-	code, _, errs := runInstallIn(t, cwd, "claude-hook")
-	if code != 1 || !strings.Contains(errs, "wrapper not found") {
-		t.Fatalf("exit = %d, stderr = %q", code, errs)
+
+	code, out, errb := runInstallIn(t, cwd, "claude-hook")
+	if code != 0 || !strings.Contains(out, "installed hook") {
+		t.Fatalf("exit = %d out=%q err=%q", code, out, errb)
 	}
-	if _, err := os.Stat(filepath.Join(cwd, ".claude", "settings.json")); err == nil {
-		t.Error("settings file written despite missing wrapper")
+	got, err := os.ReadFile(wrapper)
+	if err != nil {
+		t.Fatalf("wrapper not written: %v", err)
+	}
+	if !bytes.Equal(got, embeddedWrapper) {
+		t.Errorf("wrapper content differs from the embedded source (%d bytes)", len(got))
+	}
+	if fi, err := os.Stat(wrapper); err != nil || fi.Mode().Perm()&0o100 == 0 {
+		t.Errorf("wrapper mode = %v, want executable", fi.Mode())
+	}
+
+	m := readJSON(t, filepath.Join(cwd, ".claude", "settings.json"))
+	if got := bashCommands(t, m); len(got) != 1 || got[0] != wrapper {
+		t.Errorf("Bash hooks = %v, want [%s]", got, wrapper)
 	}
 }
 
-// fakePiExtension places a stub shizo-pi.ts next to the fake wrapper.
-func fakePiExtension(t *testing.T) string {
-	t.Helper()
-	wrapper := fakeWrapper(t)
-	ext := filepath.Join(filepath.Dir(wrapper), "shizo-pi.ts")
-	if err := os.WriteFile(ext, []byte("// stub\n"), 0o644); err != nil {
+// A restrictive umask must not strip the exec bit from the materialized
+// wrapper: WriteFile's mode is umask-masked, so install chmods it back.
+func TestInstallMaterializesWrapperUmask(t *testing.T) {
+	umask := syscall.Umask(0o077)
+	t.Cleanup(func() { syscall.Umask(umask) })
+
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
+	code, out, errb := runInstallIn(t, t.TempDir(), "claude-hook")
+	if code != 0 || !strings.Contains(out, "installed hook") {
+		t.Fatalf("exit = %d out=%q err=%q", code, out, errb)
+	}
+	if fi, err := os.Stat(wrapper); err != nil || fi.Mode().Perm()&0o100 == 0 {
+		t.Errorf("wrapper mode = %v, %v; want executable despite umask 077", fi.Mode(), err)
+	}
+}
+
+// A wrapper that differs from the embedded source is refused, never
+// overwritten: an operator may have patched it.
+func TestInstallDivergentWrapperRefused(t *testing.T) {
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n# patched\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return ext
+	cwd := t.TempDir()
+
+	code, _, errb := runInstallIn(t, cwd, "claude-hook")
+	if code != 1 || !strings.Contains(errb, "differs from the wrapper") {
+		t.Fatalf("exit = %d, stderr = %q", code, errb)
+	}
+	if b, _ := os.ReadFile(wrapper); string(b) != "#!/bin/sh\n# patched\n" {
+		t.Errorf("divergent wrapper was modified: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, ".claude", "settings.json")); err == nil {
+		t.Error("settings file written despite divergent wrapper")
+	}
 }
 
+// The extension is copied as a regular file (never a symlink) with the
+// embedded content; re-running is a no-op.
 func TestInstallPiExtension(t *testing.T) {
-	ext := fakePiExtension(t)
+	fakeEngine(t)
 	proj, home := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -294,8 +333,12 @@ func TestInstallPiExtension(t *testing.T) {
 		if code != 0 || !strings.Contains(out, "installed pi extension") {
 			t.Fatalf("%s: code=%d out=%q err=%q", c.name, code, out, errb)
 		}
-		if got, err := os.Readlink(c.target); err != nil || got != ext {
-			t.Errorf("%s: link = %q, %v; want %q", c.name, got, err, ext)
+		fi, err := os.Lstat(c.target)
+		if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+			t.Fatalf("%s: target = %v, %v; want a regular file", c.name, fi.Mode(), err)
+		}
+		if got, err := os.ReadFile(c.target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
+			t.Errorf("%s: content differs from the embedded source: %v", c.name, err)
 		}
 		code, out, _ = runInstallIn(t, proj, c.args...)
 		if code != 0 || !strings.Contains(out, "already installed") {
@@ -304,8 +347,63 @@ func TestInstallPiExtension(t *testing.T) {
 	}
 }
 
+// A stale symlink from an older install pointing at identical content is
+// migrated to a regular file so it cannot dangle once engine/shizo-pi.ts is
+// gone.
+func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
+	fakeEngine(t)
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
+	upstream := t.TempDir() + "/old.shizo.ts"
+	if err := os.WriteFile(upstream, embeddedPiExtension, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	if err := os.Symlink(upstream, target); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	fi, err := os.Lstat(target)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("target = %v, %v; want a regular file", fi.Mode(), err)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
+		t.Errorf("content differs from the embedded source: %v", err)
+	}
+}
+
+// A broken symlink (its upstream engine/shizo-pi.ts is gone) is replaced by
+// the regular copy.
+func TestInstallPiExtensionReplacesDanglingSymlink(t *testing.T) {
+	fakeEngine(t)
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	if err := os.Symlink("/nonexistent/engine/shizo-pi.ts", target); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	fi, err := os.Lstat(target)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("target = %v, %v; want a regular file", fi.Mode(), err)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
+		t.Errorf("content differs from the embedded source: %v", err)
+	}
+}
+
 func TestInstallPiExtensionRefusals(t *testing.T) {
-	fakePiExtension(t)
+	fakeEngine(t)
 	proj := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 
@@ -317,19 +415,25 @@ func TestInstallPiExtensionRefusals(t *testing.T) {
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.WriteFile(target, []byte("mine"), 0o644)
 	code, _, errb := runInstallIn(t, proj, "pi-extension")
-	if code != 1 || !strings.Contains(errb, "already exists") {
+	if code != 1 || !strings.Contains(errb, "already exists with different content") {
 		t.Errorf("existing file: code=%d err=%q", code, errb)
 	}
 	if b, _ := os.ReadFile(target); string(b) != "mine" {
 		t.Errorf("existing file was overwritten: %q", b)
 	}
-}
 
-func TestInstallPiExtensionMissingSource(t *testing.T) {
-	fakeWrapper(t) // wrapper but no shizo-pi.ts
-	code, _, errb := runInstallIn(t, t.TempDir(), "pi-extension")
-	if code != 1 || !strings.Contains(errb, "make install") {
-		t.Errorf("code=%d err=%q", code, errb)
+	// A directory at the target is refused, never written into.
+	proj2 := t.TempDir()
+	dirTarget := filepath.Join(proj2, ".pi", "extensions", "shizo.ts")
+	if err := os.MkdirAll(dirTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errb = runInstallIn(t, proj2, "pi-extension")
+	if code != 1 || !strings.Contains(errb, "already exists") {
+		t.Errorf("directory target: code=%d err=%q", code, errb)
+	}
+	if entries, err := os.ReadDir(dirTarget); err != nil || len(entries) != 0 {
+		t.Errorf("directory target modified: %v, %v", entries, err)
 	}
 }
 
