@@ -224,6 +224,12 @@ shizo attest --global
 shizo attest [FILE]     # default: <cwd>/.shizo
 ```
 
+`shizo edit [--global]` combines the two steps: it opens the same tier in
+`$EDITOR` (falling back to `$VISUAL`; if neither is set, this exits with an
+error) and, when the editor exits cleanly, attests the result through the
+same path as `attest`. An editor that exits non-zero — the user cancelled —
+skips attestation, so the tier stays unattested and keeps denying everything.
+
 Normalization parses the tier, removes comments and whitespace, sorts rules,
 serializes them canonically, and hashes the result with SHA-256. Cosmetic edits
 therefore do not require approval. Records live under

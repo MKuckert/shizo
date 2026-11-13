@@ -131,6 +131,8 @@ func TestRunHelp(t *testing.T) {
 		{nil, "usage: shizo [command]"},
 		{[]string{"hook"}, "usage: shizo hook pretooluse"},
 		{[]string{"validate"}, "usage: shizo validate"},
+		{[]string{"attest"}, "usage: shizo attest"},
+		{[]string{"edit"}, "usage: shizo edit"},
 		{[]string{"test"}, "usage: shizo test"},
 		{[]string{"selfcheck"}, "usage: shizo selfcheck"},
 		{[]string{"bogus"}, "usage: shizo [command]"}, // unknown -> root

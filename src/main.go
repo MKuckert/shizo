@@ -40,6 +40,7 @@ Commands:
   hook <event> hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
   validate    lint rule files (all errors + semantic warnings)
   attest      record operator approval of a rule tier (required before it is trusted)
+  edit        open a rule tier in $EDITOR and attest it afterwards
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
   install     register the Claude Code hook or the pi extension
@@ -80,6 +81,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runValidate(args[1:], stdout, stderr)
 		case "attest":
 			return runAttest(args[1:], stdout, stderr)
+		case "edit":
+			return runEdit(args[1:], stdout, stderr)
 		case "test":
 			return runTest(args[1:], stdin, stdout, stderr)
 		case "selfcheck":
@@ -109,6 +112,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = validateUsage
 		case "attest":
 			usage = attestUsage
+		case "edit":
+			usage = editUsage
 		case "test":
 			usage = testUsage
 		case "selfcheck":
