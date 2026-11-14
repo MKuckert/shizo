@@ -59,7 +59,8 @@ directives). Exit 0 = no errors (warnings allowed), 1 = errors, 2 = usage.
 
 ## Layout
 
-Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
+Everything ships from `src/` (Go, plus the embedded `shizo.sh` wrapper and
+`pi-shizo.ts` extension).
 
 | File            | Responsibility                                             |
 | --------------- | ---------------------------------------------------------- |
@@ -73,8 +74,9 @@ Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 | `info.go`       | `shizo info` — operator-only; prints the install's resolved paths |
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
-| `shizo.sh`       | wrapper installed as the hook `command`; fails closed      |
-| `conf/`         | starter global rules, example Claude settings, editor grammar, pi extension (`conf/pi/shizo.ts`) |
+| `shizo.sh`       | wrapper installed as the hook `command`; fails closed; embedded in the binary for `shizo install claude-hook` |
+| `pi-shizo.ts`    | pi extension source; embedded in the binary for `shizo install pi-extension` |
+| `conf/`         | starter global rules, example Claude settings, editor grammar |
 
 ## Rules DSL (see `docs/RULES.md`)
 
