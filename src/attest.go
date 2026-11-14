@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -72,27 +73,45 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 		path = projectRulesPathFor(cwd)
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Fprintf(stderr, "attest: unreadable: %s: %s\n", path, err)
-		return 1
-	}
-
-	norm, reason, ok := normalizeTier(string(data), !global)
-	if !ok {
-		fmt.Fprintf(stderr, "attest: %s\n", reason)
-		return 1
-	}
-
-	abs, err := filepath.Abs(path)
+	tier, recordPath, err := attestPath(path, global)
 	if err != nil {
 		fmt.Fprintf(stderr, "attest: %s\n", err)
 		return 1
 	}
+	printAttested(stdout, tier, path, recordPath)
+	return 0
+}
 
-	tier := "project"
+// printAttested prints the shared success line for `attest` and `edit`, so
+// the two commands' output stays in lockstep.
+func printAttested(stdout io.Writer, tier, path, recordPath string) {
+	col := newColorer(stdout)
+	fmt.Fprintln(stdout, col.success(fmt.Sprintf("attested %s tier %s -> %s", tier, path, recordPath)))
+}
+
+// attestPath records operator approval of the tier at path (global or project)
+// and returns its name and the record's path. `attest` and `edit` share this
+// one read → normalize → hash → write code path, so an edit's attestation is
+// byte-identical to what a manual attest would write.
+func attestPath(path string, global bool) (tier, recordPath string, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", fmt.Errorf("unreadable: %s: %s", path, err)
+	}
+
+	norm, reason, ok := normalizeTier(string(data), !global)
+	if !ok {
+		return "", "", errors.New(reason)
+	}
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", err
+	}
+
+	tier = "project"
 	root := installRoot()
-	recordPath := projectAttestPath(root, abs)
+	recordPath = projectAttestPath(root, abs)
 	fields := map[string]string{}
 	if global {
 		tier = "global"
@@ -108,12 +127,9 @@ func runAttest(args []string, stdout, stderr io.Writer) int {
 	fields["attested-by"] = attestedBy()
 
 	if err := writeAttestRecord(recordPath, fields, norm.canonical); err != nil {
-		fmt.Fprintf(stderr, "attest: %s\n", err)
-		return 1
+		return "", "", err
 	}
-	col := newColorer(stdout)
-	fmt.Fprintln(stdout, col.success(fmt.Sprintf("attested %s tier %s -> %s", tier, path, recordPath)))
-	return 0
+	return tier, recordPath, nil
 }
 
 func attestedBy() string {

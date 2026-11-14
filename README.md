@@ -173,13 +173,17 @@ missing trust directories, and ignored project directives.
 After reviewing and validating a tier, approve it outside the sandbox:
 
 ```sh
+shizo edit [--global]   # open the tier in $EDITOR, then attest it
 shizo attest --global   # resolved global tier and trusted PATH snapshot
 shizo attest [FILE]     # project tier; defaults to <cwd>/.shizo
 ```
 
-The hook denies everything if a present tier lacks a matching attestation or if
-the trusted portion of `PATH` changed. Comments, whitespace, and rule order are
-excluded from the hash. A fresh install attests its starter global rules.
+`edit` opens the same tier in `$EDITOR` (falling back to `$VISUAL`) and
+attests a clean editor exit through the same path as `attest`; a cancelled
+editor leaves the tier unattested. The hook denies everything if a present
+tier lacks a matching attestation or if the trusted portion of `PATH`
+changed. Comments, whitespace, and rule order are excluded from the hash. A
+fresh install attests its starter global rules.
 
 ### Test a decision
 
