@@ -115,14 +115,19 @@ func runDocs(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// isTerminal reports whether w is an *os.File pointing at a character device.
+// isTerminal reports whether w is an *os.File pointing at a real terminal.
+// The character-device pre-check alone would admit /dev/null, so the kernel
+// is asked via TIOCGWINSZ (see terminal_unix.go).
 func isTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
 		return false
 	}
 	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+	if err != nil || st.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	return ioctlIsTerminal(f)
 }
 
 // runPager pipes doc into $PAGER (falling back to less) and reports whether a

@@ -35,7 +35,7 @@ jobs:
       # reports the tag so a stale hardcoded version cannot ship.
       - name: Verify tag-derived version
         run: |
-          go build -ldflags "-X main.version=${GITHUB_REF_NAME#v}" -o /tmp/shizo .
+          go build -ldflags "-X main.version=${GITHUB_REF_NAME#v}" -o /tmp/shizo ./src
           got="$(/tmp/shizo --version)"
           if [ "$got" != "shizo ${GITHUB_REF_NAME#v}" ]; then
             echo "version mismatch: binary reports '$got', tag is $GITHUB_REF_NAME" >&2
