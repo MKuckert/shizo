@@ -18,5 +18,7 @@ changelog can be generated from history.
 ### GitHub Pages
 
 The `pages` job builds the site with `make site` and publishes `public/` via
-`actions/deploy-pages`. In the repository settings, set Pages → Source to
+`actions/deploy-pages`. Like the release job it uses a full checkout
+(`fetch-depth: 0`), because `make site` resolves the `{{VERSION}}` placeholder
+from release tags. In the repository settings, set Pages → Source to
 "GitHub Actions".
