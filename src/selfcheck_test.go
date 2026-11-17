@@ -281,6 +281,14 @@ func TestRunSelfcheckWorkspaceFlag(t *testing.T) {
 		t.Errorf("empty workspace should report N/A: %q", out.String())
 	}
 
+	// A writable workspace path renders as WARN, not FAIL or N/A.
+	writable := setupWorkspace(t, false)
+	out.Reset()
+	rc = runSelfcheck([]string{"--workspace", writable}, &out, &errb)
+	if !strings.Contains(out.String(), "WARN .git/config not writable") {
+		t.Errorf("writable path should render WARN: %q", out.String())
+	}
+
 	rc = runSelfcheck([]string{"--workspace"}, &out, &errb)
 	if rc != 2 {
 		t.Errorf("--workspace with no value: rc=%d, want 2", rc)
@@ -289,13 +297,17 @@ func TestRunSelfcheckWorkspaceFlag(t *testing.T) {
 
 func TestRunSelfcheckStrictFlag(t *testing.T) {
 	setupSelfcheck(t)
+	ws := setupWorkspace(t, false)
 
 	var out, errb bytes.Buffer
-	rc := runSelfcheck([]string{"--strict"}, &out, &errb)
+	rc := runSelfcheck([]string{"--workspace", ws, "--strict"}, &out, &errb)
 	if rc != 1 {
 		t.Errorf("rc=%d, want 1", rc)
 	}
 	// Under --strict a writable workspace path renders as FAIL, not WARN.
+	if !strings.Contains(out.String(), "FAIL .git/config not writable") {
+		t.Errorf("--strict should render the writable path as FAIL: %q", out.String())
+	}
 	if strings.Contains(out.String(), "WARN") {
 		t.Errorf("--strict output should not contain WARN: %q", out.String())
 	}
@@ -402,6 +414,52 @@ func TestSelfcheckRootCheckFails(t *testing.T) {
 	}
 }
 
+func TestRenderSelfcheck(t *testing.T) {
+	var b bytes.Buffer
+	results := []checkResult{
+		{Name: "a", Pass: true},
+		{Name: "b", Pass: false, Warn: true, Detail: "opened for write"},
+		{Name: "c", Pass: true, NA: true},
+	}
+	renderSelfcheck(&b, results, false)
+	s := b.String()
+	for _, want := range []string{
+		"PASS a",
+		"WARN b  (opened for write)",
+		"N/A  c",
+		"selfcheck: PASS (1 warning)",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("render missing %q:\n%s", want, s)
+		}
+	}
+
+	// Two warnings pluralize; a clean run prints no count.
+	b.Reset()
+	renderSelfcheck(&b, append(results, checkResult{Name: "d", Pass: false, Warn: true}), false)
+	if !strings.Contains(b.String(), "selfcheck: PASS (2 warnings)") {
+		t.Errorf("want plural warning count:\n%s", b.String())
+	}
+	b.Reset()
+	renderSelfcheck(&b, []checkResult{{Name: "a", Pass: true}}, false)
+	if s := b.String(); !strings.Contains(s, "selfcheck: PASS") || strings.Contains(s, "warning") {
+		t.Errorf("clean run should have no warning count:\n%s", s)
+	}
+
+	// Strict renders warn failures as FAIL and drops the warning count.
+	b.Reset()
+	renderSelfcheck(&b, results, true)
+	s = b.String()
+	for _, want := range []string{"FAIL b", "selfcheck: FAIL"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("strict render missing %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "WARN") {
+		t.Errorf("strict render should not contain WARN:\n%s", s)
+	}
+}
+
 func TestRunSelfcheckJSON(t *testing.T) {
 	setupSelfcheck(t)
 	t.Setenv("NONO_CAP_FILE", "/fake")
@@ -418,6 +476,32 @@ func TestRunSelfcheckJSON(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatal("no results")
+	}
+}
+
+func TestCheckResultJSONShape(t *testing.T) {
+	b, err := json.Marshal(checkResult{Name: "x", Pass: true, Warn: true, NA: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["warn"] != true || m["na"] != true {
+		t.Errorf("warn/na should be present and true: %s", b)
+	}
+
+	b, _ = json.Marshal(checkResult{Name: "x", Pass: true})
+	m = nil
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["warn"]; ok {
+		t.Errorf("warn should be omitted when unset: %s", b)
+	}
+	if _, ok := m["na"]; ok {
+		t.Errorf("na should be omitted when unset: %s", b)
 	}
 }
 
