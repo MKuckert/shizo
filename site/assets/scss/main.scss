@@ -143,6 +143,13 @@ code {
     }
 }
 
+.cta-note {
+    max-width: 520px;
+    margin: 1.25rem auto 0;
+    color: $text-muted;
+    font-size: 0.85rem;
+}
+
 // -- Pipeline steps --
 .pipeline {
     padding: 4rem 0;
