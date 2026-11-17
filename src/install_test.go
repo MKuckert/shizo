@@ -337,6 +337,9 @@ func TestInstallPiExtension(t *testing.T) {
 		if err != nil || fi.Mode()&os.ModeSymlink != 0 {
 			t.Fatalf("%s: target = %v, %v; want a regular file", c.name, fi.Mode(), err)
 		}
+		if fi.Mode().Perm() != 0o644 {
+			t.Errorf("%s: mode = %v, want 0644", c.name, fi.Mode())
+		}
 		if got, err := os.ReadFile(c.target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
 			t.Errorf("%s: content differs from the embedded source: %v", c.name, err)
 		}
@@ -344,6 +347,69 @@ func TestInstallPiExtension(t *testing.T) {
 		if code != 0 || !strings.Contains(out, "already installed") {
 			t.Errorf("%s rerun: code=%d out=%q", c.name, code, out)
 		}
+	}
+}
+
+// The extension spawns the wrapper on every bash call, so a pi install
+// materializes it next to the binary — including when the extension itself is
+// already installed (a bare release binary must self-install completely).
+func TestInstallPiExtensionMaterializesWrapper(t *testing.T) {
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	code, out, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	assertWrapper(t, wrapper)
+
+	// Re-run: the extension is already installed, but the wrapper must still
+	// be ensured.
+	if err := os.Remove(wrapper); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ = runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "already installed") {
+		t.Fatalf("rerun: code=%d out=%q", code, out)
+	}
+	assertWrapper(t, wrapper)
+}
+
+// assertWrapper checks the materialized wrapper matches the embedded source
+// and is executable.
+func assertWrapper(t *testing.T, path string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("wrapper not written: %v", err)
+	}
+	if !bytes.Equal(got, embeddedWrapper) {
+		t.Errorf("wrapper content differs from the embedded source (%d bytes)", len(got))
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm()&0o100 == 0 {
+		t.Errorf("wrapper mode = %v, %v; want executable", fi.Mode(), err)
+	}
+}
+
+// A divergent wrapper blocks the pi install too (ensureWrapper runs first):
+// exit 1 and no extension written.
+func TestInstallPiExtensionDivergentWrapperRefused(t *testing.T) {
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n# patched\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	code, _, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 1 || !strings.Contains(errb, "differs from the wrapper") {
+		t.Fatalf("exit = %d, stderr = %q", code, errb)
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".pi", "extensions", "shizo.ts")); err == nil {
+		t.Error("extension written despite divergent wrapper")
 	}
 }
 
@@ -374,6 +440,10 @@ func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
 	}
 	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
 		t.Errorf("content differs from the embedded source: %v", err)
+	}
+	// The temp-file rename must leave no residue next to the extension.
+	if entries, err := os.ReadDir(filepath.Dir(target)); err != nil || len(entries) != 1 || entries[0].Name() != "shizo.ts" {
+		t.Errorf("extension dir = %v, %v; want only shizo.ts", entries, err)
 	}
 }
 

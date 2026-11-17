@@ -26,7 +26,8 @@ claude-hook registers the shizo.sh wrapper as a PreToolUse/Bash hook in a
 Claude Code settings file, merging into whatever is already there; it writes
 the wrapper next to the binary from the embedded source if missing.
 pi-extension copies the embedded pi extension into pi's extension directory
-(docs/PI.md); it never overwrites a different file.
+(docs/PI.md) and materializes the shizo.sh wrapper next to the binary if
+missing; it never overwrites a different file.
 
 Flags:
   --project   claude-hook: .claude/settings.json in the cwd (default)
@@ -161,11 +162,19 @@ func ensureWrapper() (string, error) {
 // directory (docs/PI.md). Idempotent: an identical regular file is left
 // alone; a different existing file is refused, never overwritten. Stale
 // symlinks from older installs are replaced by the regular copy so they
-// cannot dangle once engine/shizo-pi.ts is gone.
+// cannot dangle once engine/shizo-pi.ts is gone. The replacement is written
+// to a temp file and renamed into place, so an existing extension is never
+// missing or partially written. The shizo.sh wrapper the extension spawns is
+// materialized next to the binary too — including on a no-op re-run — so a
+// bare release binary self-installs completely.
 func installPiExtension(global bool, stdout, stderr io.Writer) int {
 	target := filepath.Join(".pi", "extensions", "shizo.ts")
 	if global {
 		target = filepath.Join(os.Getenv("HOME"), ".pi", "agent", "extensions", "shizo.ts")
+	}
+	if _, err := ensureWrapper(); err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
 	}
 	cur, err := os.ReadFile(target)
 	if !os.IsNotExist(err) {
@@ -183,23 +192,37 @@ func installPiExtension(global bool, stdout, stderr io.Writer) int {
 			return 0
 		}
 		// Identical content behind a symlink: migrate to a regular file below.
-		if err := os.Remove(target); err != nil {
-			fmt.Fprintf(stderr, "install: %v\n", err)
-			return 1
-		}
-	} else if _, lerr := os.Lstat(target); lerr == nil {
-		// A broken symlink: ReadFile saw IsNotExist, but WriteFile would not
-		// replace it — remove it first.
-		if err := os.Remove(target); err != nil {
-			fmt.Fprintf(stderr, "install: %v\n", err)
-			return 1
-		}
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	// A broken symlink also reaches here (ReadFile saw IsNotExist); the
+	// rename below replaces it, since rename does not follow symlinks.
+	dir := filepath.Dir(target)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}
-	if err := os.WriteFile(target, embeddedPiExtension, 0o644); err != nil {
+	tmp, err := os.CreateTemp(dir, ".shizo.ts-*.tmp")
+	if err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(embeddedPiExtension); err != nil {
+		tmp.Close()
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	if err := tmp.Close(); err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	// CreateTemp makes the file 0600; widen to the usual mode before the
+	// rename, which lands in the same directory and preserves it
+	// (writeSettings pattern).
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		fmt.Fprintf(stderr, "install: %v\n", err)
+		return 1
+	}
+	if err := os.Rename(tmp.Name(), target); err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}

@@ -9,16 +9,21 @@ unchanged.
 ## Install
 
 `shizo install pi-extension` copies the extension embedded in the binary into
-pi's extension directory. Then run pi inside the nono sandbox like any other
-shizo-gated agent:
+pi's extension directory, and materializes the `shizo.sh` wrapper next to the
+binary if it is missing — the extension spawns that wrapper on every `bash`
+call, so a bare release binary self-installs completely. Then run pi inside
+the nono sandbox like any other shizo-gated agent:
 
 ```sh
 shizo install pi-extension             # .pi/extensions/shizo.ts in the cwd
 shizo install pi-extension --global    # ~/.pi/agent/extensions/shizo.ts
 ```
 
-A re-run is a no-op. A stale symlink from an older install is replaced by the
-regular copy; an existing file with different content is never overwritten.
+A re-run is a no-op, though it still ensures the wrapper exists. A stale
+symlink from an older install is replaced by the regular copy; the replacement
+is written to a temp file and renamed into place, so an existing extension is
+never missing or partially written. An existing file with different content is
+never overwritten.
 
 The extension runs `$HOME/.shizo/engine/shizo.sh` (`shizo info --hook-command`);
 set `SHIZO_HOOK` to use another wrapper path.
