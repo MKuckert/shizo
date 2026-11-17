@@ -353,4 +353,14 @@ code {
     .cta-row {
         flex-direction: column;
     }
+
+    // The brew command is too wide for small viewports; let it wrap.
+    .cta-install {
+        width: 100%;
+
+        code {
+            white-space: normal;
+            word-break: break-word;
+        }
+    }
 }
