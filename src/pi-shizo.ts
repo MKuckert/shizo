@@ -3,12 +3,12 @@
 // are enforced; ask and "no decision" fall back to a user confirm. Fail-closed:
 // any wrapper failure, unparseable output, or confirm-less (headless) ask blocks.
 import { spawn } from "node:child_process";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
-const HOOK = process.env.SHIZO_HOOK ?? join(homedir(), ".shizo", "engine", "shizo.sh");
+// `shizo install pi-extension` substitutes the wrapper path it materialized
+// for __SHIZO_WRAPPER__ (docs/PI.md); SHIZO_HOOK still overrides at runtime.
+const HOOK = process.env.SHIZO_HOOK ?? "__SHIZO_WRAPPER__";
 
 type Verdict = { kind: "allow" | "deny" | "ask" | "none"; reason: string };
 

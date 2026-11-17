@@ -312,9 +312,14 @@ func TestInstallDivergentWrapperRefused(t *testing.T) {
 }
 
 // The extension is copied as a regular file (never a symlink) with the
-// embedded content; re-running is a no-op.
+// rendered content (the materialized wrapper path written in); re-running is
+// a no-op.
 func TestInstallPiExtension(t *testing.T) {
-	fakeEngine(t)
+	engine := fakeEngine(t)
+	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	proj, home := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -340,8 +345,8 @@ func TestInstallPiExtension(t *testing.T) {
 		if fi.Mode().Perm() != 0o644 {
 			t.Errorf("%s: mode = %v, want 0644", c.name, fi.Mode())
 		}
-		if got, err := os.ReadFile(c.target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
-			t.Errorf("%s: content differs from the embedded source: %v", c.name, err)
+		if got, err := os.ReadFile(c.target); err != nil || !bytes.Equal(got, want) {
+			t.Errorf("%s: content differs from the rendered extension: %v", c.name, err)
 		}
 		code, out, _ = runInstallIn(t, proj, c.args...)
 		if code != 0 || !strings.Contains(out, "already installed") {
@@ -413,16 +418,137 @@ func TestInstallPiExtensionDivergentWrapperRefused(t *testing.T) {
 	}
 }
 
+// If the binary moved since a previous install, the installed extension's
+// wrapper path is updated in place rather than refused; a hand edit is not a
+// previous render and is still refused.
+func TestInstallPiExtensionUpdatesMovedBinary(t *testing.T) {
+	fakeEngine(t) // first root
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
+
+	code, out, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+
+	engineB := fakeEngine(t) // installExe now points at a second root
+	want, err := renderPiExtension(filepath.Join(engineB, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errb = runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("rerun: code=%d out=%q err=%q", code, out, errb)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("content not updated to the new wrapper path: %v", err)
+	}
+
+	// A hand edit is not a previous render: refused, never overwritten.
+	got, _ := os.ReadFile(target)
+	got[len(got)-1] = 'x'
+	if err := os.WriteFile(target, got, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errb = runInstallIn(t, proj, "pi-extension")
+	if code != 1 || !strings.Contains(errb, "different content") {
+		t.Errorf("hand edit: code=%d err=%q", code, errb)
+	}
+	if b, _ := os.ReadFile(target); !bytes.Equal(b, got) {
+		t.Error("hand-edited extension was overwritten")
+	}
+}
+
+// A previous render behind a symlink (an older install left the symlink in
+// place, the binary moved) is updated in place: the rename replaces the
+// symlink with a regular file, leaving its upstream untouched.
+func TestInstallPiExtensionUpdatesSymlinkedRender(t *testing.T) {
+	engineA := fakeEngine(t)
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
+
+	wantA, err := renderPiExtension(filepath.Join(engineA, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstream := t.TempDir() + "/shizo.ts"
+	if err := os.WriteFile(upstream, wantA, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	if err := os.Symlink(upstream, target); err != nil {
+		t.Fatal(err)
+	}
+
+	engineB := fakeEngine(t) // the binary moved to a second root
+	wantB, err := renderPiExtension(filepath.Join(engineB, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errb := runInstallIn(t, proj, "pi-extension")
+	if code != 0 || !strings.Contains(out, "installed pi extension") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	fi, err := os.Lstat(target)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("target = %v, %v; want a regular file", fi.Mode(), err)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, wantB) {
+		t.Errorf("content not updated to the new wrapper path: %v", err)
+	}
+	if b, err := os.ReadFile(upstream); err != nil || !bytes.Equal(b, wantA) {
+		t.Errorf("symlink upstream was modified: %v", err)
+	}
+}
+
+// renderPiExtension and wrapperPathIn are exact inverses, including paths
+// with characters that need JSON escaping; the SHIZO_HOOK override survives
+// the render. An unrendered source copy (the placeholder still in place) is
+// recognized as a render, so re-installing a hand-copied source file fixes
+// it rather than refusing.
+func TestRenderPiExtensionRoundTrip(t *testing.T) {
+	for _, p := range []string{
+		"/home/u/.shizo/engine/shizo.sh",
+		`/tmp/we"ird\path/shizo.sh`,
+	} {
+		rendered, err := renderPiExtension(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(rendered), "process.env.SHIZO_HOOK ??") {
+			t.Error("SHIZO_HOOK override lost in rendered extension")
+		}
+		got, ok := wrapperPathIn(rendered)
+		if !ok || got != p {
+			t.Errorf("round-trip %q = %q, ok=%v", p, got, ok)
+		}
+	}
+	if got, ok := wrapperPathIn(embeddedPiExtension); !ok || got != "__SHIZO_WRAPPER__" {
+		t.Errorf("unrendered source: %q, ok=%v; want recognized as a render", got, ok)
+	}
+	if _, ok := wrapperPathIn(append([]byte("x"), embeddedPiExtension...)); ok {
+		t.Error("modified source recognized as a render")
+	}
+}
+
 // A stale symlink from an older install pointing at identical content is
 // migrated to a regular file so it cannot dangle once engine/shizo-pi.ts is
 // gone.
 func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
-	fakeEngine(t)
+	engine := fakeEngine(t)
+	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	proj := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
 	upstream := t.TempDir() + "/old.shizo.ts"
-	if err := os.WriteFile(upstream, embeddedPiExtension, 0o644); err != nil {
+	if err := os.WriteFile(upstream, want, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	os.MkdirAll(filepath.Dir(target), 0o755)
@@ -438,8 +564,8 @@ func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
 	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("target = %v, %v; want a regular file", fi.Mode(), err)
 	}
-	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
-		t.Errorf("content differs from the embedded source: %v", err)
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("content differs from the rendered extension: %v", err)
 	}
 	// The temp-file rename must leave no residue next to the extension.
 	if entries, err := os.ReadDir(filepath.Dir(target)); err != nil || len(entries) != 1 || entries[0].Name() != "shizo.ts" {
@@ -450,7 +576,11 @@ func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
 // A broken symlink (its upstream engine/shizo-pi.ts is gone) is replaced by
 // the regular copy.
 func TestInstallPiExtensionReplacesDanglingSymlink(t *testing.T) {
-	fakeEngine(t)
+	engine := fakeEngine(t)
+	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	proj := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
@@ -467,8 +597,8 @@ func TestInstallPiExtensionReplacesDanglingSymlink(t *testing.T) {
 	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("target = %v, %v; want a regular file", fi.Mode(), err)
 	}
-	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, embeddedPiExtension) {
-		t.Errorf("content differs from the embedded source: %v", err)
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("content differs from the rendered extension: %v", err)
 	}
 }
 
