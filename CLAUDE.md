@@ -21,7 +21,7 @@ under `plans/`.
 ## Build, test, install
 
 ```sh
-make test         # cd src && go test ./...  — run before every commit
+make test         # go test ./... from the repo root  — run before every commit
 make build        # -> dist/shizo
 make install      # installs to $HOME/.shizo (never clobbers rules)
 make install PREFIX=/tmp/x   # install elsewhere for verification
@@ -30,7 +30,9 @@ make install PREFIX=/tmp/x   # install elsewhere for verification
 `shizo help` prints a subcommand overview; `help <cmd>` (or `<cmd> --help`)
 prints that command's usage. `shizo info` prints the paths this install
 resolves — one `key<TAB>value` line per entry, or a single bare value with
-`--<key>` (`rules=$(shizo info --global-rules-path)`).
+`--<key>` (`rules=$(shizo info --global-rules-path)`). The operator docs
+themselves ship inside the binary: `shizo docs` lists them, `shizo docs
+<slug>` prints one.
 
 Lint rule files before installing them:
 
@@ -59,11 +61,13 @@ directives). Exit 0 = no errors (warnings allowed), 1 = errors, 2 = usage.
 
 ## Layout
 
-Everything ships from `src/` (Go, plus the embedded `shizo.sh` wrapper and
-`pi-shizo.ts` extension).
+The Go module root is the repo root; the hook ships from `src/` (Go, plus the
+embedded `shizo.sh` wrapper and `pi-shizo.ts` extension), and a single root
+file embeds the docs.
 
 | File            | Responsibility                                             |
 | --------------- | ---------------------------------------------------------- |
+| `docs.go`       | root-level embed of `docs/*.md`, served by `shizo docs`    |
 | `main.go`       | CLI dispatch + help; hook I/O: read JSON stdin, emit decision JSON, logging |
 | `policy.go`     | `decide()` — the §2 evaluation pipeline, aggregates outcomes |
 | `rules.go`      | load/parse global + project rule tiers into `config`; wires the attestation verdict into `loadConfig` |

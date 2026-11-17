@@ -237,6 +237,18 @@ shizo info --cwd DIR --project-rules-path
 `info` prints where this install resolves its rules, attestations, logs, engine,
 and hook command, so scripts and troubleshooting need not hardcode `~/.shizo`.
 
+### Read the docs
+
+The design reference ships inside the binary, so it works from a bare release
+install with no source checkout:
+
+```sh
+shizo docs            # list slugs and titles
+shizo docs rules      # print one doc ($PAGER on a terminal, raw when piped)
+```
+
+Slugs are the `docs/*.md` filenames lowercased without extension.
+
 ## Operations and recovery
 
 Hook decisions are appended to `$HOME/.shizo/logs/YYYY-MM-DD.jsonl`.

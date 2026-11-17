@@ -29,7 +29,7 @@ SSG_SRC := cmd/ssg
 
 build:
 	mkdir -p "$(DIST)"
-	cd "$(SRC)" && go build -ldflags="-X main.version=$(VERSION)" -o "../$(BIN)" .
+	go build -ldflags="-X main.version=$(VERSION)" -o "$(BIN)" ./src
 
 # Cross-compile stripped, path-clean binaries for every platform in PLATFORMS.
 release: clean
@@ -40,12 +40,12 @@ release: clean
 		[ "$$os" = windows ] && out="$$out.exe"; \
 		mkdir -p "$(DIST)/$(p)"; \
 		echo "  -> $$out"; \
-		( cd "$(SRC)" && GOOS=$$os GOARCH=$$arch \
-			go build -trimpath -ldflags="$(LDFLAGS)" -o "../$$out" . ) || exit 1; \
+		( GOOS=$$os GOARCH=$$arch \
+			go build -trimpath -ldflags="$(LDFLAGS)" -o "$$out" ./src ) || exit 1; \
 	)
 
 test:
-	cd "$(SRC)" && go test ./...
+	go test ./...
 
 # Installs the binary + wrapper (read-only), and the starter global rules
 # ONLY if none exist yet — never clobbers an operator's tuned rules.

@@ -39,6 +39,7 @@ revisited if either behavior changes.
 | Loosening controls     | `trust`, `sandbox`, and `returntype` are global-only                               | A project cannot alter the execution boundary or output mode                       |
 | Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
 | Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | The agent cannot replace the gate; its registration is protected by the profile    |
+| Embedded docs          | `docs/*.md` compiled into the binary through a root-level embed package      | `shizo docs` serves the design reference from a bare release install, no source checkout needed |
 | Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
 | Automode               | Defer only unmatched results; explicit ask rules emit `ask`                        | Explicit allow, deny, and ask policy remains authoritative                         |
 | Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
