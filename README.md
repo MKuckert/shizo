@@ -134,6 +134,9 @@ nono why --self --path .git/config --op write   # DENIED
 nono why --self --path src --op write           # ALLOWED
 ```
 
+`shizo selfcheck` runs the same probes programmatically from inside the
+sandbox, for these workspace paths and the `$HOME/.shizo` install.
+
 ## Claude Code Automode
 
 You'd like to set the env var `CLAUDE_CODE_THRIFTY_SONIC=0` if you're using claude codes
@@ -204,12 +207,20 @@ Run the syscall-based checks from inside the sandbox:
 
 ```sh
 shizo selfcheck
+shizo selfcheck --workspace DIR   # probe another workspace (default: cwd)
+shizo selfcheck --strict          # count workspace warnings as failures
 shizo selfcheck --json
 shizo selfcheck --root DIR
 ```
 
-The check verifies that the engine, rules, and attestations cannot be written
-and that logs can. It does not rely on file mode bits or modify the rules.
+The checks verify that the engine, rules, and attestations cannot be written
+and that logs can. They do not rely on file mode bits or modify the rules.
+Workspace probes additionally verify that the execution-controlling paths
+(`.git/config`, `.git/hooks/`, `.claude/settings.json`, and the project
+`.shizo` tier) are not writable; because layouts vary (no `.claude`,
+worktrees, ...), those emit warnings instead of failures — `--strict`
+promotes them. A writable project tier is informational: attestation
+backstops it, and any tamper flips the hash into a deny-all.
 
 ### Resolved paths
 
