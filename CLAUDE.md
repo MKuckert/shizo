@@ -73,6 +73,7 @@ Everything ships from `src/` (Go) + `src/shizo.sh` (bash wrapper).
 | `info.go`       | `shizo info` — operator-only; prints the install's resolved paths |
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
+| `edit.go`       | `shizo edit` — operator-only; opens a tier in $EDITOR and attests it |
 | `shizo.sh`       | wrapper installed as the hook `command`; fails closed      |
 | `conf/`         | starter global rules, example Claude settings, editor grammar, pi extension (`conf/pi/shizo.ts`) |
 
