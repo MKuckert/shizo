@@ -52,8 +52,16 @@ sandbox. Because `nono` cannot downgrade part of a read/write grant to
 read-only, the profile grants read on the workspace and read/write only on
 named source directories and files.
 [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) documents
-the intended grants, and `shizo selfcheck` probes the `$HOME/.shizo` grants'
-effective syscall behavior from inside the sandbox.
+the intended grants, and `shizo selfcheck` probes their effective syscall
+behavior from inside the sandbox: the `$HOME/.shizo` checks are hard failures,
+while the workspace probes (`.git/config`, `.git/hooks/`,
+`.claude/settings.json`, the project `.shizo` tier) warn because layouts vary
+(no `.claude`, worktrees, ...); `--strict` promotes them to failures. The
+hooks probe covers the hook files already present, not just new entries, and a
+path that cannot even be inspected (permission error, symlink loop) is a
+failed warning with the diagnostic rather than a skip. The project-tier probe
+is informational — attestation backstops it, so any tamper flips the hash into
+a deny-all.
 
 ## Parser choice
 

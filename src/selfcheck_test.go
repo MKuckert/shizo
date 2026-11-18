@@ -129,6 +129,314 @@ func TestProbeStoreReadOnly(t *testing.T) {
 	}
 }
 
+// setupWorkspace builds a temp workspace with every execution-controlling
+// path present, optionally making them read-only.
+func setupWorkspace(t *testing.T, readOnly bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, ".git/config", "[core]\n")
+	os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755)
+	writeFile(t, dir, ".claude/settings.json", "{}\n")
+	writeFile(t, dir, ".shizo", "allow git status ANY\n")
+	if readOnly {
+		os.Chmod(filepath.Join(dir, ".git", "config"), 0o444)
+		os.Chmod(filepath.Join(dir, ".git", "hooks"), 0o555)
+		os.Chmod(filepath.Join(dir, ".claude", "settings.json"), 0o444)
+		os.Chmod(filepath.Join(dir, ".shizo"), 0o444)
+	}
+	return dir
+}
+
+func TestWorkspaceCheckResults(t *testing.T) {
+	// Structure and N/A handling are meaningful under any euid.
+
+	// Empty workspace: all four paths missing, N/A and passing.
+	empty := t.TempDir()
+	results := workspaceCheckResults(empty)
+	if len(results) != 4 {
+		t.Fatalf("got %d results, want 4", len(results))
+	}
+	byName := map[string]checkResult{}
+	for _, r := range results {
+		byName[r.Name] = r
+	}
+	for _, name := range []string{
+		".git/config not writable",
+		".git/hooks/ not writable",
+		".claude/settings.json not writable",
+		".shizo not writable",
+	} {
+		r, ok := byName[name]
+		if !ok {
+			t.Errorf("missing check %q", name)
+			continue
+		}
+		if r.Kind != kindNA {
+			t.Errorf("%s: Kind=%q, want na (path absent)", name, r.Kind)
+		}
+		if !r.Pass {
+			t.Errorf("%s: missing path must pass, detail=%q", name, r.Detail)
+		}
+	}
+
+	// Partial layout: an existing path is probed, the rest are N/A.
+	partial := t.TempDir()
+	writeFile(t, partial, ".git/config", "[core]\n")
+	got := workspaceCheckResults(partial)
+	if len(got) != 4 {
+		t.Fatalf("got %d results, want 4", len(got))
+	}
+	for _, r := range got {
+		if r.Name == ".git/config not writable" {
+			if r.Kind != kindWarn {
+				t.Errorf(".git/config: Kind=%q, want warn (path exists)", r.Kind)
+			}
+		} else {
+			if r.Kind != kindNA {
+				t.Errorf("%s: Kind=%q, want na (path absent)", r.Name, r.Kind)
+			}
+			if !r.Pass {
+				t.Errorf("%s: missing path must pass, detail=%q", r.Name, r.Detail)
+			}
+		}
+	}
+
+	// Worktree layout: .git is a file, so .git/config and .git/hooks are
+	// ENOTDIR — an unsupported layout, N/A rather than a failure.
+	wt := t.TempDir()
+	writeFile(t, wt, ".git", "gitdir: /other/repo/.git/worktrees/wt\n")
+	got = workspaceCheckResults(wt)
+	for _, r := range got {
+		if r.Kind != kindNA || !r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want na pass in worktree layout (detail=%q)", r.Name, r.Kind, r.Pass, r.Detail)
+		}
+	}
+
+	// Symlink loop: the path cannot be inspected — a failed advisory check
+	// with the diagnostic, not a passing N/A.
+	loop := t.TempDir()
+	os.MkdirAll(filepath.Join(loop, ".claude"), 0o755)
+	if err := os.Symlink("settings.json", filepath.Join(loop, ".claude", "settings.json")); err != nil {
+		t.Fatal(err)
+	}
+	got = workspaceCheckResults(loop)
+	for _, r := range got {
+		if r.Name != ".claude/settings.json not writable" {
+			continue
+		}
+		if r.Kind == kindNA || r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want failed advisory check", r.Name, r.Kind, r.Pass)
+		}
+		if !strings.Contains(r.Detail, "cannot stat") {
+			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
+		}
+	}
+}
+
+func TestWorkspaceCheckResultsPermissions(t *testing.T) {
+	skipIfRoot(t)
+
+	// Every path present and writable: four warn-level failures.
+	dir := setupWorkspace(t, false)
+	results := workspaceCheckResults(dir)
+	byName := map[string]checkResult{}
+	for _, r := range results {
+		byName[r.Name] = r
+	}
+	for name, r := range byName {
+		if r.Kind != kindWarn {
+			t.Errorf("%s: Kind=%q, want warn-level probe of an existing path", name, r.Kind)
+		}
+		if r.Pass {
+			t.Errorf("%s: writable path reported Pass=true, detail=%q", name, r.Detail)
+		}
+	}
+	if !strings.Contains(byName[".shizo not writable"].Detail, "attestation") {
+		t.Errorf(".shizo writable detail should mention the attestation backstop: %q",
+			byName[".shizo not writable"].Detail)
+	}
+
+	// Every path present and read-only: four warn-level passes, no notes.
+	roDir := setupWorkspace(t, true)
+	for _, r := range workspaceCheckResults(roDir) {
+		if !r.Pass {
+			t.Errorf("%s: read-only path reported Pass=false, detail=%q", r.Name, r.Detail)
+		}
+		if strings.Contains(r.Detail, "attestation") {
+			t.Errorf("%s: unexpected attestation note in passing detail %q", r.Name, r.Detail)
+		}
+	}
+
+	// Permission error on stat: the path was never inspected — failed
+	// advisory check, not N/A.
+	eacces := t.TempDir()
+	os.MkdirAll(filepath.Join(eacces, ".claude"), 0o755)
+	os.Chmod(filepath.Join(eacces, ".claude"), 0o000)
+	t.Cleanup(func() { os.Chmod(filepath.Join(eacces, ".claude"), 0o755) })
+	for _, r := range workspaceCheckResults(eacces) {
+		if r.Name != ".claude/settings.json not writable" {
+			continue
+		}
+		if r.Kind == kindNA || r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want failed advisory check", r.Name, r.Kind, r.Pass)
+		}
+		if !strings.Contains(r.Detail, "cannot stat") {
+			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with a writable hook inside: the existing hook is
+	// still mutable, so the check fails despite the protected directory.
+	hooksDir := setupWorkspace(t, false)
+	writeFile(t, hooksDir, ".git/hooks/pre-commit", "#!/bin/sh\n")
+	os.Chmod(filepath.Join(hooksDir, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(hooksDir, ".git", "hooks"), 0o755) })
+	got := workspaceCheckResults(hooksDir)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: writable hook in read-only dir reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "pre-commit is writable") {
+			t.Errorf("%s: detail=%q, want the writable hook named", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with a symlink to a writable file: same vector.
+	symlinkDir := setupWorkspace(t, false)
+	target := writeFile(t, t.TempDir(), "evil-hook", "#!/bin/sh\n")
+	if err := os.Symlink(target, filepath.Join(symlinkDir, ".git", "hooks", "post-commit")); err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(filepath.Join(symlinkDir, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(symlinkDir, ".git", "hooks"), 0o755) })
+	got = workspaceCheckResults(symlinkDir)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: symlink to writable hook reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "post-commit is writable") {
+			t.Errorf("%s: detail=%q, want the symlinked hook named", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with read-only hooks: passes, naming the state.
+	cleanHooks := setupWorkspace(t, false)
+	roHook := writeFile(t, cleanHooks, ".git/hooks/pre-commit", "#!/bin/sh\n")
+	os.Chmod(roHook, 0o444)
+	os.Chmod(filepath.Join(cleanHooks, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(cleanHooks, ".git", "hooks"), 0o755) })
+	got = workspaceCheckResults(cleanHooks)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if !r.Pass {
+			t.Errorf("%s: read-only dir and hooks reported Pass=false, detail=%q", r.Name, r.Detail)
+		}
+	}
+
+	// Unreadable hooks dir: enumeration itself is a failed advisory check.
+	noRead := setupWorkspace(t, true)
+	os.Chmod(filepath.Join(noRead, ".git", "hooks"), 0o000)
+	t.Cleanup(func() { os.Chmod(filepath.Join(noRead, ".git", "hooks"), 0o555) })
+	got = workspaceCheckResults(noRead)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: unreadable hooks dir reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "cannot enumerate hooks") {
+			t.Errorf("%s: detail=%q, want enumeration diagnostic", r.Name, r.Detail)
+		}
+	}
+}
+
+func TestSelfcheckExitCode(t *testing.T) {
+	hard := []checkResult{{Name: "a", Kind: kindHard, Pass: false}, {Name: "b", Kind: kindHard, Pass: true}}
+	if got := selfcheckExitCode(hard, false); got != 1 {
+		t.Errorf("hard failure: exit=%d, want 1", got)
+	}
+	warn := []checkResult{{Name: "a", Kind: kindWarn, Pass: false}, {Name: "b", Kind: kindHard, Pass: true}}
+	if got := selfcheckExitCode(warn, false); got != 0 {
+		t.Errorf("warn-only failure without --strict: exit=%d, want 0", got)
+	}
+	if got := selfcheckExitCode(warn, true); got != 1 {
+		t.Errorf("warn failure with --strict: exit=%d, want 1", got)
+	}
+	ok := []checkResult{{Name: "a", Kind: kindHard, Pass: true}, {Name: "b", Kind: kindNA, Pass: true}}
+	if got := selfcheckExitCode(ok, true); got != 0 {
+		t.Errorf("all pass: exit=%d, want 0", got)
+	}
+}
+
+func TestRunSelfcheckWorkspaceFlag(t *testing.T) {
+	setupSelfcheck(t)
+	ws := t.TempDir()
+
+	var out, errb bytes.Buffer
+	rc := runSelfcheck([]string{"--workspace", ws}, &out, &errb)
+	// Outside the sandbox the install checks fail (rc 1); the workspace
+	// probes must still be present and warn-level, not failing on their own.
+	if rc != 1 {
+		t.Errorf("rc=%d, want 1 (unsandboxed install probes fail)", rc)
+	}
+	for _, name := range []string{".git/config not writable", ".shizo not writable"} {
+		if !strings.Contains(out.String(), name) {
+			t.Errorf("output missing %q: %q", name, out.String())
+		}
+	}
+	if !strings.Contains(out.String(), "N/A") {
+		t.Errorf("empty workspace should report N/A: %q", out.String())
+	}
+
+	// A writable workspace path renders as WARN, not FAIL or N/A.
+	writable := setupWorkspace(t, false)
+	out.Reset()
+	rc = runSelfcheck([]string{"--workspace", writable}, &out, &errb)
+	if !strings.Contains(out.String(), "WARN .git/config not writable") {
+		t.Errorf("writable path should render WARN: %q", out.String())
+	}
+
+	rc = runSelfcheck([]string{"--workspace"}, &out, &errb)
+	if rc != 2 {
+		t.Errorf("--workspace with no value: rc=%d, want 2", rc)
+	}
+}
+
+func TestRunSelfcheckStrictFlag(t *testing.T) {
+	setupSelfcheck(t)
+	ws := setupWorkspace(t, false)
+
+	var out, errb bytes.Buffer
+	rc := runSelfcheck([]string{"--workspace", ws, "--strict"}, &out, &errb)
+	if rc != 1 {
+		t.Errorf("rc=%d, want 1", rc)
+	}
+	// Under --strict a writable workspace path renders as FAIL, not WARN.
+	if !strings.Contains(out.String(), "FAIL .git/config not writable") {
+		t.Errorf("--strict should render the writable path as FAIL: %q", out.String())
+	}
+	if strings.Contains(out.String(), "WARN") {
+		t.Errorf("--strict output should not contain WARN: %q", out.String())
+	}
+
+	// Help mentions the new flags.
+	var help bytes.Buffer
+	rc = runSelfcheck([]string{"--help"}, &help, &errb)
+	if rc != 0 || !strings.Contains(help.String(), "--workspace") ||
+		!strings.Contains(help.String(), "--strict") {
+		t.Errorf("help: rc=%d, missing flags: %q", rc, help.String())
+	}
+}
+
 func TestConfigLoadErrors(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "global/rules", "sandbox nono\nallow git status ANY\n")
@@ -222,6 +530,52 @@ func TestSelfcheckRootCheckFails(t *testing.T) {
 	}
 }
 
+func TestRenderSelfcheck(t *testing.T) {
+	var b bytes.Buffer
+	results := []checkResult{
+		{Name: "a", Kind: kindHard, Pass: true},
+		{Name: "b", Kind: kindWarn, Pass: false, Detail: "opened for write"},
+		{Name: "c", Kind: kindNA, Pass: true},
+	}
+	renderSelfcheck(&b, results, false)
+	s := b.String()
+	for _, want := range []string{
+		"PASS a",
+		"WARN b  (opened for write)",
+		"N/A  c",
+		"selfcheck: PASS (1 warning)",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("render missing %q:\n%s", want, s)
+		}
+	}
+
+	// Two warnings pluralize; a clean run prints no count.
+	b.Reset()
+	renderSelfcheck(&b, append(results, checkResult{Name: "d", Kind: kindWarn, Pass: false}), false)
+	if !strings.Contains(b.String(), "selfcheck: PASS (2 warnings)") {
+		t.Errorf("want plural warning count:\n%s", b.String())
+	}
+	b.Reset()
+	renderSelfcheck(&b, []checkResult{{Name: "a", Kind: kindHard, Pass: true}}, false)
+	if s := b.String(); !strings.Contains(s, "selfcheck: PASS") || strings.Contains(s, "warning") {
+		t.Errorf("clean run should have no warning count:\n%s", s)
+	}
+
+	// Strict renders warn failures as FAIL and drops the warning count.
+	b.Reset()
+	renderSelfcheck(&b, results, true)
+	s = b.String()
+	for _, want := range []string{"FAIL b", "selfcheck: FAIL"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("strict render missing %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "WARN") {
+		t.Errorf("strict render should not contain WARN:\n%s", s)
+	}
+}
+
 func TestRunSelfcheckJSON(t *testing.T) {
 	setupSelfcheck(t)
 	t.Setenv("NONO_CAP_FILE", "/fake")
@@ -238,6 +592,39 @@ func TestRunSelfcheckJSON(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatal("no results")
+	}
+}
+
+func TestCheckResultJSONShape(t *testing.T) {
+	// kind is always present and carries the enum value.
+	for kind, want := range map[checkKind]string{kindHard: "hard", kindWarn: "warn", kindNA: "na"} {
+		b, err := json.Marshal(checkResult{Name: "x", Pass: true, Kind: kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m["kind"] != want {
+			t.Errorf("kind=%s: JSON kind=%v, want %q: %s", kind, m["kind"], want, b)
+		}
+		if _, ok := m["detail"]; ok {
+			t.Errorf("kind=%s: empty detail should be omitted: %s", kind, b)
+		}
+	}
+
+	// The old warn/na booleans are gone.
+	b, _ := json.Marshal(checkResult{Name: "x", Pass: true, Kind: kindNA})
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["warn"]; ok {
+		t.Errorf("warn should no longer be emitted: %s", b)
+	}
+	if _, ok := m["na"]; ok {
+		t.Errorf("na should no longer be emitted: %s", b)
 	}
 }
 
