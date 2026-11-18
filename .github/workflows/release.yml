@@ -15,9 +15,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
@@ -25,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6.5.0
         with:
-          go-version-file: src/go.mod
+          go-version-file: go.mod
 
       - name: Vet
         run: go vet ./...
@@ -38,7 +35,7 @@ jobs:
       # reports the tag so a stale hardcoded version cannot ship.
       - name: Verify tag-derived version
         run: |
-          go build -ldflags "-X main.version=${GITHUB_REF_NAME#v}" -o /tmp/shizo .
+          go build -ldflags "-X main.version=${GITHUB_REF_NAME#v}" -o /tmp/shizo ./src
           got="$(/tmp/shizo --version)"
           if [ "$got" != "shizo ${GITHUB_REF_NAME#v}" ]; then
             echo "version mismatch: binary reports '$got', tag is $GITHUB_REF_NAME" >&2
@@ -58,10 +55,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6.5.0
         with:
-          go-version-file: src/go.mod
+          go-version-file: go.mod
 
       - name: Vulnerability scan
-        working-directory: src
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
       - name: Run GoReleaser

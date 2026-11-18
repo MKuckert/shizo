@@ -3,7 +3,7 @@ version: 2
 project_name: shizo
 
 builds:
-  - dir: src
+  - main: ./src
     binary: shizo
     ldflags:
       - -s -w -X main.version={{.Version}}

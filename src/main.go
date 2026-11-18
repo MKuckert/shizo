@@ -45,6 +45,7 @@ Commands:
   selfcheck   verify the sandbox enforces the install's read/write shape
   install     register the Claude Code hook or the pi extension
   info        print the paths shizo resolves (rules, logs, engine, hook command)
+  docs        view the embedded operator docs (list with no argument)
   help [cmd]  show this overview, or detailed usage for a command
               (aliases: --help, -h, -?)
   --version   print the version (alias: -v)
@@ -91,6 +92,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return runInstall(args[1:], stdout, stderr)
 		case "info":
 			return runInfo(args[1:], stdout, stderr)
+		case "docs":
+			return runDocs(args[1:], stdout, stderr)
 		default:
 			fmt.Fprintf(stderr, "shizo: unknown command %q\n\n%s\n", args[0], rootUsage)
 			return 2
@@ -122,6 +125,8 @@ func runHelp(args []string, stdout io.Writer) int {
 			usage = installUsage
 		case "info":
 			usage = infoUsage
+		case "docs":
+			usage = docsUsage
 		}
 	}
 	fmt.Fprintln(stdout, usage)
