@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -17,10 +18,14 @@ import (
 var (
 	siteDir string
 	outDir  string
+	version = ""
 )
 
 func main() {
 	root := flag.String("root", ".", "project root directory")
+	// An empty -value falls back to the git tag, same as omitting the flag.
+	flag.StringVar(&version, "version", "",
+		"release version substituted for {{VERSION}} in content (default: latest reachable git tag)")
 	flag.Parse()
 
 	siteDir = filepath.Join(*root, "site")
@@ -28,19 +33,40 @@ func main() {
 
 	args := flag.Args()
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: ssg [-root DIR] <build|serve>")
+		fmt.Fprintln(os.Stderr, "usage: ssg [-root DIR] [-version V] <build|serve>")
 		os.Exit(2)
+	}
+	if args[0] != "build" && args[0] != "serve" {
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
+		os.Exit(2)
+	}
+	if version == "" {
+		version = mustDescribeVersion(*root)
 	}
 	switch args[0] {
 	case "build":
 		build()
-	case "serve":
+	default: // serve
 		build()
 		serve()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
-		os.Exit(2)
 	}
+}
+
+// mustDescribeVersion returns the latest reachable release tag (e.g. "v0.5")
+// so the site's release link can't drift from the repo. --match constrains to
+// v-prefixed release tags (the repo also carries a non-v "0.1" tag). Content
+// files carry {{VERSION}} placeholders that renderPages substitutes; failing
+// here keeps a version-less build from shipping a dead link.
+func mustDescribeVersion(root string) string {
+	out, err := exec.Command("git", "-C", root, "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*").Output()
+	if err != nil {
+		log.Fatal("site: cannot determine version from git tags; pass -version explicitly")
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "" {
+		log.Fatal("site: git describe returned no version; pass -version explicitly")
+	}
+	return v
 }
 
 func build() {
@@ -68,6 +94,7 @@ func renderPages() {
 		}
 		body, err := os.ReadFile(filepath.Join(contentDir, e.Name()))
 		must(err)
+		body = []byte(strings.ReplaceAll(string(body), "{{VERSION}}", version))
 
 		outPath := filepath.Join(outDir, e.Name())
 		f, err := os.Create(outPath)

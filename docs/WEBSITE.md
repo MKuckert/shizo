@@ -10,6 +10,7 @@ dependencies beyond Go itself.
 ```sh
 make site                                       # build to public/
 cd cmd/ssg && go run . -root ../.. serve        # build + serve on localhost:8080
+cd cmd/ssg && go run . -root ../.. -version v0.6 build   # pin the version
 ```
 
 `make site` runs the generator's `build` command, which recreates `public/`
@@ -43,7 +44,11 @@ The build pipeline has three stages, each a plain function in `main.go`:
 1. **renderPages** — parses `site/templates/layout.html` as a Go
    `html/template`, reads each `.html` file in `site/content/`, and executes
    the template with the file's body as `{{.Content}}`. Content files are raw
-   HTML fragments, not templates themselves.
+   HTML fragments, not templates themselves — the only dynamic part is the
+   `{{VERSION}}` placeholder, substituted before rendering with the current
+   release version (by default the latest reachable git tag,
+   overridable with `-version`) so the release link in `index.html`
+   cannot drift.
 
 2. **compileSCSS** — compiles `site/assets/scss/main.scss` to
    `public/css/main.css` using `go-scss/scss` (pure Go, CGO=0) in compressed

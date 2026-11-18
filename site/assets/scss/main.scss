@@ -143,6 +143,13 @@ code {
     }
 }
 
+.cta-note {
+    max-width: 520px;
+    margin: 1.25rem auto 0;
+    color: $text-muted;
+    font-size: 0.85rem;
+}
+
 // -- Pipeline steps --
 .pipeline {
     padding: 4rem 0;
@@ -345,5 +352,15 @@ code {
 
     .cta-row {
         flex-direction: column;
+    }
+
+    // The brew command is too wide for small viewports; let it wrap.
+    .cta-install {
+        width: 100%;
+
+        code {
+            white-space: normal;
+            word-break: break-word;
+        }
     }
 }

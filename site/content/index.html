@@ -12,17 +12,25 @@
         </p>
 
         <div class="cta-row">
+            <span class="cta-install"
+                ><code>brew install mkuckert/homebrew-tap/shizo</code></span
+            >
             <a
                 href="https://github.com/MKuckert/shizo"
                 class="btn btn-primary"
                 >View on GitHub</a
             >
             <a
-                href="https://github.com/MKuckert/shizo/releases/tag/v0.5"
+                href="https://github.com/MKuckert/shizo/releases/tag/{{VERSION}}"
                 class="btn btn-secondary"
-                >Download <small>v0.5</small></a
+                >Download <small>{{VERSION}}</small></a
             >
         </div>
+        <p class="cta-note">
+            After installing, run the setup steps brew prints in its caveats:
+            create <code>~/.shizo</code>, copy the starter rules, attest them,
+            and register the hook.
+        </p>
     </div>
 </section>
 
