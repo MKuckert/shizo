@@ -1,6 +1,6 @@
 # pi coding agent integration
 
-[`conf/pi/shizo.ts`](../conf/pi/shizo.ts) is a pi extension that gates every
+[`src/pi-shizo.ts`](../src/pi-shizo.ts) is a pi extension that gates every
 `bash` tool call through the same `shizo.sh` wrapper Claude Code uses (see
 [`CLAUDE_CODE_HOOKS.md`](CLAUDE_CODE_HOOKS.md)). It subscribes to pi's
 `tool_call` event, so the policy pipeline in [`EVALUATION.md`](EVALUATION.md) is
@@ -8,20 +8,28 @@ unchanged.
 
 ## Install
 
-`make install` places the extension next to the wrapper as
-`engine/shizo-pi.ts`. Link it into pi's extension directory, then run pi inside
-the nono sandbox like any other shizo-gated agent:
+`shizo install pi-extension` copies the extension embedded in the binary into
+pi's extension directory, and materializes the `shizo.sh` wrapper next to the
+binary if it is missing — writing that wrapper's path into the installed
+extension, which spawns it on every `bash` call. A bare release binary thus
+self-installs completely. Then run pi inside the nono sandbox like any other
+shizo-gated agent:
 
 ```sh
 shizo install pi-extension             # .pi/extensions/shizo.ts in the cwd
 shizo install pi-extension --global    # ~/.pi/agent/extensions/shizo.ts
 ```
 
-The link follows the install, so re-running `make install` updates the
-extension. An existing file at the target is never overwritten.
+A re-run is a no-op, though it still ensures the wrapper exists; if the binary
+moved since, the installed path is updated in place. A stale symlink from an
+older install is replaced by the regular copy; the replacement is written to a
+temp file and renamed into place, so an existing extension is never missing or
+partially written. Any other existing file — a hand edit, another tool's
+extension — is refused, never overwritten.
 
-The extension runs `$HOME/.shizo/engine/shizo.sh` (`shizo info --hook-command`);
-set `SHIZO_HOOK` to use another wrapper path.
+The extension runs the wrapper path this install materialized next to the
+binary — `$HOME/.shizo/engine/shizo.sh` in a standard layout (`shizo info
+--hook-command`). Set `SHIZO_HOOK` to use another wrapper path.
 
 ## Decisions
 
