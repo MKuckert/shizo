@@ -206,6 +206,37 @@ func TestWorkspaceCheckResults(t *testing.T) {
 			}
 		}
 	}
+
+	// Worktree layout: .git is a file, so .git/config and .git/hooks are
+	// ENOTDIR — an unsupported layout, N/A rather than a failure.
+	wt := t.TempDir()
+	writeFile(t, wt, ".git", "gitdir: /other/repo/.git/worktrees/wt\n")
+	got = workspaceCheckResults(wt)
+	for _, r := range got {
+		if !r.NA || !r.Pass {
+			t.Errorf("%s: NA=%v Pass=%v, want N/A pass in worktree layout (detail=%q)", r.Name, r.NA, r.Pass, r.Detail)
+		}
+	}
+
+	// Symlink loop: the path cannot be inspected — a failed advisory check
+	// with the diagnostic, not a passing N/A.
+	loop := t.TempDir()
+	os.MkdirAll(filepath.Join(loop, ".claude"), 0o755)
+	if err := os.Symlink("settings.json", filepath.Join(loop, ".claude", "settings.json")); err != nil {
+		t.Fatal(err)
+	}
+	got = workspaceCheckResults(loop)
+	for _, r := range got {
+		if r.Name != ".claude/settings.json not writable" {
+			continue
+		}
+		if r.NA || r.Pass {
+			t.Errorf("%s: NA=%v Pass=%v, want failed advisory check", r.Name, r.NA, r.Pass)
+		}
+		if !strings.Contains(r.Detail, "cannot stat") {
+			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
+		}
+	}
 }
 
 func TestWorkspaceCheckResultsPermissions(t *testing.T) {
@@ -239,6 +270,97 @@ func TestWorkspaceCheckResultsPermissions(t *testing.T) {
 		}
 		if strings.Contains(r.Detail, "attestation") {
 			t.Errorf("%s: unexpected attestation note in passing detail %q", r.Name, r.Detail)
+		}
+	}
+
+	// Permission error on stat: the path was never inspected — failed
+	// advisory check, not N/A.
+	eacces := t.TempDir()
+	os.MkdirAll(filepath.Join(eacces, ".claude"), 0o755)
+	os.Chmod(filepath.Join(eacces, ".claude"), 0o000)
+	t.Cleanup(func() { os.Chmod(filepath.Join(eacces, ".claude"), 0o755) })
+	for _, r := range workspaceCheckResults(eacces) {
+		if r.Name != ".claude/settings.json not writable" {
+			continue
+		}
+		if r.NA || r.Pass {
+			t.Errorf("%s: NA=%v Pass=%v, want failed advisory check", r.Name, r.NA, r.Pass)
+		}
+		if !strings.Contains(r.Detail, "cannot stat") {
+			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with a writable hook inside: the existing hook is
+	// still mutable, so the check fails despite the protected directory.
+	hooksDir := setupWorkspace(t, false)
+	writeFile(t, hooksDir, ".git/hooks/pre-commit", "#!/bin/sh\n")
+	os.Chmod(filepath.Join(hooksDir, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(hooksDir, ".git", "hooks"), 0o755) })
+	got := workspaceCheckResults(hooksDir)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: writable hook in read-only dir reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "pre-commit is writable") {
+			t.Errorf("%s: detail=%q, want the writable hook named", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with a symlink to a writable file: same vector.
+	symlinkDir := setupWorkspace(t, false)
+	target := writeFile(t, t.TempDir(), "evil-hook", "#!/bin/sh\n")
+	if err := os.Symlink(target, filepath.Join(symlinkDir, ".git", "hooks", "post-commit")); err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(filepath.Join(symlinkDir, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(symlinkDir, ".git", "hooks"), 0o755) })
+	got = workspaceCheckResults(symlinkDir)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: symlink to writable hook reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "post-commit is writable") {
+			t.Errorf("%s: detail=%q, want the symlinked hook named", r.Name, r.Detail)
+		}
+	}
+
+	// Read-only hooks dir with read-only hooks: passes, naming the state.
+	cleanHooks := setupWorkspace(t, false)
+	roHook := writeFile(t, cleanHooks, ".git/hooks/pre-commit", "#!/bin/sh\n")
+	os.Chmod(roHook, 0o444)
+	os.Chmod(filepath.Join(cleanHooks, ".git", "hooks"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(cleanHooks, ".git", "hooks"), 0o755) })
+	got = workspaceCheckResults(cleanHooks)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if !r.Pass {
+			t.Errorf("%s: read-only dir and hooks reported Pass=false, detail=%q", r.Name, r.Detail)
+		}
+	}
+
+	// Unreadable hooks dir: enumeration itself is a failed advisory check.
+	noRead := setupWorkspace(t, true)
+	os.Chmod(filepath.Join(noRead, ".git", "hooks"), 0o000)
+	t.Cleanup(func() { os.Chmod(filepath.Join(noRead, ".git", "hooks"), 0o555) })
+	got = workspaceCheckResults(noRead)
+	for _, r := range got {
+		if r.Name != ".git/hooks/ not writable" {
+			continue
+		}
+		if r.Pass {
+			t.Errorf("%s: unreadable hooks dir reported Pass=true, detail=%q", r.Name, r.Detail)
+		}
+		if !strings.Contains(r.Detail, "cannot enumerate hooks") {
+			t.Errorf("%s: detail=%q, want enumeration diagnostic", r.Name, r.Detail)
 		}
 	}
 }

@@ -216,11 +216,13 @@ shizo selfcheck --root DIR
 The checks verify that the engine, rules, and attestations cannot be written
 and that logs can. They do not rely on file mode bits or modify the rules.
 Workspace probes additionally verify that the execution-controlling paths
-(`.git/config`, `.git/hooks/`, `.claude/settings.json`, and the project
-`.shizo` tier) are not writable; because layouts vary (no `.claude`,
-worktrees, ...), those emit warnings instead of failures — `--strict`
-promotes them. A writable project tier is informational: attestation
-backstops it, and any tamper flips the hash into a deny-all.
+(`.git/config`, `.git/hooks/` — both new entries and the hook files already
+present, `.claude/settings.json`, and the project `.shizo` tier) are not
+writable; because layouts vary (no `.claude`, worktrees, ...), those emit
+warnings instead of failures — `--strict` promotes them. A path that cannot
+even be inspected (permission error, symlink loop) is a failed warning with
+the diagnostic, not a skip. A writable project tier is informational:
+attestation backstops it, and any tamper flips the hash into a deny-all.
 
 ### Resolved paths
 

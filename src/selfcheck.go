@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // The `selfcheck` subcommand verifies, from inside the sandbox, that the
@@ -164,37 +166,44 @@ func selfcheckResults(root string) []checkResult {
 // (see docs/ARCHITECTURE.md "Self-protection"): each one decides what later
 // executes, so the sandbox profile must keep them read-only.
 type workspaceProbe struct {
-	name string // check name, e.g. ".git/config not writable"
-	path string // relative to the workspace root
-	dir  bool   // probe as a directory (create-and-remove) rather than open-for-write
-	note string // advisory detail appended when the path is writable
+	name  string // check name, e.g. ".git/config not writable"
+	path  string // relative to the workspace root
+	hooks bool   // .git/hooks: probe dir creation and the existing hook files
+	note  string // advisory detail appended when the path is writable
 }
 
 var workspaceProbes = []workspaceProbe{
 	{name: ".git/config not writable", path: filepath.Join(".git", "config")},
-	{name: ".git/hooks/ not writable", path: filepath.Join(".git", "hooks"), dir: true},
+	{name: ".git/hooks/ not writable", path: filepath.Join(".git", "hooks"), hooks: true},
 	{name: ".claude/settings.json not writable", path: filepath.Join(".claude", "settings.json")},
 	{name: ".shizo not writable", path: ".shizo",
 		note: "informational: a tampered project tier flips its attestation hash, which denies all commands"},
 }
 
-// workspaceCheckResults probes each execution-controlling path that exists in
-// workspace. Results are warn-level: a writable path is reported but does not
-// fail the run (layouts vary), and a missing path is N/A, not FAIL. The
-// probes reuse the same non-destructive operations as the install checks.
+// workspaceCheckResults probes each execution-controlling path in workspace.
+// Results are warn-level: a writable path is reported but does not fail the
+// run (layouts vary), and a missing path is N/A, not FAIL. A path that
+// cannot even be inspected (permission error, symlink loop, I/O) is a failed
+// advisory check with the original diagnostic — N/A is reserved for confirmed
+// absence and unsupported layouts (a worktree's .git is a file, so its
+// .git/config and .git/hooks are ENOTDIR). The probes reuse the same
+// non-destructive operations as the install checks.
 func workspaceCheckResults(workspace string) []checkResult {
 	var out []checkResult
 	for _, p := range workspaceProbes {
 		full := filepath.Join(workspace, p.path)
 		if _, err := os.Stat(full); err != nil {
-			out = append(out, checkResult{Name: p.name, Pass: true, Warn: true, NA: true, Detail: "path does not exist"})
+			if os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR) {
+				out = append(out, checkResult{Name: p.name, Pass: true, Warn: true, NA: true, Detail: "path does not exist"})
+			} else {
+				out = append(out, checkResult{Name: p.name, Pass: false, Warn: true, Detail: "cannot stat: " + err.Error()})
+			}
 			continue
 		}
 		var ok bool
 		var detail string
-		if p.dir {
-			writable, d := probeDirWrite(full)
-			ok, detail = !writable, d
+		if p.hooks {
+			ok, detail = probeHooksDirNotWritable(full)
 		} else {
 			notWritable, d := probeFileNotWritable(full)
 			ok, detail = notWritable, d
@@ -267,6 +276,41 @@ func probeDirWrite(dir string) (writable bool, detail string) {
 	f.Close()
 	os.Remove(path)
 	return true, "created and removed " + path
+}
+
+// probeHooksDirNotWritable verifies a .git/hooks directory is protected both
+// against new entries (create-and-remove probe) and against mutation of the
+// hooks already inside it: every entry must be a regular file that cannot be
+// opened for writing (no write, no truncate). A read-only directory alone is
+// insufficient — an existing writable hook, or a symlink to one, stays
+// mutable. Enumeration errors and unexpected entry types fail the check: in
+// the sandbox these operations are granted, so an error means the layout is
+// not what the profile promises.
+func probeHooksDirNotWritable(dir string) (notWritable bool, detail string) {
+	writable, d := probeDirWrite(dir)
+	if writable {
+		return false, d
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, "cannot enumerate hooks: " + err.Error()
+	}
+	for _, e := range entries {
+		full := filepath.Join(dir, e.Name())
+		fi, err := os.Stat(full)
+		if err != nil {
+			return false, "cannot stat hook " + e.Name() + ": " + err.Error()
+		}
+		if !fi.Mode().IsRegular() {
+			return false, "hook " + e.Name() + " is not a regular file"
+		}
+		f, err := os.OpenFile(full, os.O_WRONLY, 0)
+		if err == nil {
+			f.Close()
+			return false, "hook " + e.Name() + " is writable"
+		}
+	}
+	return true, "directory and existing hooks are read-only"
 }
 
 // configLoadErrors validates the global tier at root the same way `validate`
