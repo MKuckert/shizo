@@ -45,16 +45,23 @@ The workspace probes (.git/config, .git/hooks/, .claude/settings.json,
 Exit 0 if every check passes, 1 if any fails (or a warning does under
 --strict), 2 on a usage problem.`
 
+// checkKind classifies a selfcheck result: hard results are install checks
+// whose failure always affects the exit code; warn results are advisory
+// workspace probes, failing the run only under --strict; na results mark
+// targets that do not exist or use an unsupported layout and always pass.
+type checkKind string
+
+const (
+	kindHard checkKind = "hard"
+	kindWarn checkKind = "warn"
+	kindNA   checkKind = "na"
+)
+
 type checkResult struct {
-	Name   string `json:"name"`
-	Pass   bool   `json:"pass"`
-	Detail string `json:"detail,omitempty"`
-	// Warn marks a check whose failure is advisory (workspace probes):
-	// it affects the exit code only under --strict.
-	Warn bool `json:"warn,omitempty"`
-	// NA marks a check whose target does not exist; there is nothing to
-	// probe, so the check passes by absence.
-	NA bool `json:"na,omitempty"`
+	Name   string    `json:"name"`
+	Pass   bool      `json:"pass"`
+	Kind   checkKind `json:"kind"`
+	Detail string    `json:"detail,omitempty"`
 }
 
 func runSelfcheck(args []string, stdout, stderr io.Writer) int {
@@ -107,7 +114,7 @@ func runSelfcheck(args []string, stdout, stderr io.Writer) int {
 // fails; a failed warn check fails only under --strict.
 func selfcheckExitCode(results []checkResult, strict bool) int {
 	for _, r := range results {
-		if !r.Pass && (!r.Warn || strict) {
+		if !r.Pass && (r.Kind == kindHard || (r.Kind == kindWarn && strict)) {
 			return 1
 		}
 	}
@@ -129,35 +136,35 @@ func selfcheckResults(root string) []checkResult {
 	if !notRoot {
 		detail = "euid=0"
 	}
-	out = append(out, checkResult{Name: "not running as root", Pass: notRoot, Detail: detail})
+	out = append(out, checkResult{Name: "not running as root", Kind: kindHard, Pass: notRoot, Detail: detail})
 
 	sandboxed := os.Getenv("NONO_CAP_FILE") != ""
-	out = append(out, checkResult{Name: "sandboxed (NONO_CAP_FILE set)", Pass: sandboxed})
+	out = append(out, checkResult{Name: "sandboxed (NONO_CAP_FILE set)", Kind: kindHard, Pass: sandboxed})
 
 	if _, err := os.ReadFile(globalRules); err != nil {
-		out = append(out, checkResult{Name: "global/rules readable", Pass: false, Detail: err.Error()})
+		out = append(out, checkResult{Name: "global/rules readable", Kind: kindHard, Pass: false, Detail: err.Error()})
 	} else {
-		out = append(out, checkResult{Name: "global/rules readable", Pass: true})
+		out = append(out, checkResult{Name: "global/rules readable", Kind: kindHard, Pass: true})
 	}
 
 	notWritable, detail := probeFileNotWritable(globalRules)
-	out = append(out, checkResult{Name: "global/rules not writable", Pass: notWritable, Detail: detail})
+	out = append(out, checkResult{Name: "global/rules not writable", Kind: kindHard, Pass: notWritable, Detail: detail})
 
 	writable, detail := probeDirWrite(globalDir)
-	out = append(out, checkResult{Name: "global/ not writable", Pass: !writable, Detail: detail})
+	out = append(out, checkResult{Name: "global/ not writable", Kind: kindHard, Pass: !writable, Detail: detail})
 
 	writable, detail = probeDirWrite(engineDir)
-	out = append(out, checkResult{Name: "engine/ not writable", Pass: !writable, Detail: detail})
+	out = append(out, checkResult{Name: "engine/ not writable", Kind: kindHard, Pass: !writable, Detail: detail})
 
 	attestDir := attestDirIn(root)
 	storeOK, detail := probeStoreReadOnly(attestDir)
-	out = append(out, checkResult{Name: "attestations/ not writable", Pass: storeOK, Detail: detail})
+	out = append(out, checkResult{Name: "attestations/ not writable", Kind: kindHard, Pass: storeOK, Detail: detail})
 
 	writable, detail = probeDirWrite(logs)
-	out = append(out, checkResult{Name: "logs/ writable", Pass: writable, Detail: detail})
+	out = append(out, checkResult{Name: "logs/ writable", Kind: kindHard, Pass: writable, Detail: detail})
 
 	errs := configLoadErrors(root)
-	out = append(out, checkResult{Name: "config loads clean", Pass: len(errs) == 0, Detail: strings.Join(errs, "; ")})
+	out = append(out, checkResult{Name: "config loads clean", Kind: kindHard, Pass: len(errs) == 0, Detail: strings.Join(errs, "; ")})
 
 	return out
 }
@@ -194,9 +201,9 @@ func workspaceCheckResults(workspace string) []checkResult {
 		full := filepath.Join(workspace, p.path)
 		if _, err := os.Stat(full); err != nil {
 			if os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR) {
-				out = append(out, checkResult{Name: p.name, Pass: true, Warn: true, NA: true, Detail: "path does not exist"})
+				out = append(out, checkResult{Name: p.name, Kind: kindNA, Pass: true, Detail: "path does not exist"})
 			} else {
-				out = append(out, checkResult{Name: p.name, Pass: false, Warn: true, Detail: "cannot stat: " + err.Error()})
+				out = append(out, checkResult{Name: p.name, Kind: kindWarn, Pass: false, Detail: "cannot stat: " + err.Error()})
 			}
 			continue
 		}
@@ -211,7 +218,7 @@ func workspaceCheckResults(workspace string) []checkResult {
 		if !ok && p.note != "" {
 			detail += " (" + p.note + ")"
 		}
-		out = append(out, checkResult{Name: p.name, Pass: ok, Warn: true, Detail: detail})
+		out = append(out, checkResult{Name: p.name, Kind: kindWarn, Pass: ok, Detail: detail})
 	}
 	return out
 }
@@ -336,11 +343,11 @@ func renderSelfcheck(w io.Writer, results []checkResult, strict bool) {
 	for _, r := range results {
 		var status string
 		switch {
-		case r.NA:
+		case r.Kind == kindNA:
 			status = "N/A"
 		case r.Pass:
 			status = col.success("PASS")
-		case r.Warn && !strict:
+		case r.Kind == kindWarn && !strict:
 			warnings++
 			status = col.warning("WARN")
 		default:

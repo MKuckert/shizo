@@ -171,14 +171,11 @@ func TestWorkspaceCheckResults(t *testing.T) {
 			t.Errorf("missing check %q", name)
 			continue
 		}
-		if !r.Warn {
-			t.Errorf("%s: Warn=false, want true", name)
+		if r.Kind != kindNA {
+			t.Errorf("%s: Kind=%q, want na (path absent)", name, r.Kind)
 		}
 		if !r.Pass {
 			t.Errorf("%s: missing path must pass, detail=%q", name, r.Detail)
-		}
-		if !r.NA {
-			t.Errorf("%s: NA=false, want true (path absent)", name)
 		}
 	}
 
@@ -191,15 +188,12 @@ func TestWorkspaceCheckResults(t *testing.T) {
 	}
 	for _, r := range got {
 		if r.Name == ".git/config not writable" {
-			if r.NA {
-				t.Error(".git/config: NA=true, want false (path exists)")
-			}
-			if !r.Warn {
-				t.Error(".git/config: Warn=false, want true")
+			if r.Kind != kindWarn {
+				t.Errorf(".git/config: Kind=%q, want warn (path exists)", r.Kind)
 			}
 		} else {
-			if !r.NA {
-				t.Errorf("%s: NA=false, want true (path absent)", r.Name)
+			if r.Kind != kindNA {
+				t.Errorf("%s: Kind=%q, want na (path absent)", r.Name, r.Kind)
 			}
 			if !r.Pass {
 				t.Errorf("%s: missing path must pass, detail=%q", r.Name, r.Detail)
@@ -213,8 +207,8 @@ func TestWorkspaceCheckResults(t *testing.T) {
 	writeFile(t, wt, ".git", "gitdir: /other/repo/.git/worktrees/wt\n")
 	got = workspaceCheckResults(wt)
 	for _, r := range got {
-		if !r.NA || !r.Pass {
-			t.Errorf("%s: NA=%v Pass=%v, want N/A pass in worktree layout (detail=%q)", r.Name, r.NA, r.Pass, r.Detail)
+		if r.Kind != kindNA || !r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want na pass in worktree layout (detail=%q)", r.Name, r.Kind, r.Pass, r.Detail)
 		}
 	}
 
@@ -230,8 +224,8 @@ func TestWorkspaceCheckResults(t *testing.T) {
 		if r.Name != ".claude/settings.json not writable" {
 			continue
 		}
-		if r.NA || r.Pass {
-			t.Errorf("%s: NA=%v Pass=%v, want failed advisory check", r.Name, r.NA, r.Pass)
+		if r.Kind == kindNA || r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want failed advisory check", r.Name, r.Kind, r.Pass)
 		}
 		if !strings.Contains(r.Detail, "cannot stat") {
 			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
@@ -250,8 +244,8 @@ func TestWorkspaceCheckResultsPermissions(t *testing.T) {
 		byName[r.Name] = r
 	}
 	for name, r := range byName {
-		if !r.Warn || r.NA {
-			t.Errorf("%s: Warn=%v NA=%v, want warn-level probe of an existing path", name, r.Warn, r.NA)
+		if r.Kind != kindWarn {
+			t.Errorf("%s: Kind=%q, want warn-level probe of an existing path", name, r.Kind)
 		}
 		if r.Pass {
 			t.Errorf("%s: writable path reported Pass=true, detail=%q", name, r.Detail)
@@ -283,8 +277,8 @@ func TestWorkspaceCheckResultsPermissions(t *testing.T) {
 		if r.Name != ".claude/settings.json not writable" {
 			continue
 		}
-		if r.NA || r.Pass {
-			t.Errorf("%s: NA=%v Pass=%v, want failed advisory check", r.Name, r.NA, r.Pass)
+		if r.Kind == kindNA || r.Pass {
+			t.Errorf("%s: Kind=%q Pass=%v, want failed advisory check", r.Name, r.Kind, r.Pass)
 		}
 		if !strings.Contains(r.Detail, "cannot stat") {
 			t.Errorf("%s: detail=%q, want cannot stat diagnostic", r.Name, r.Detail)
@@ -366,18 +360,18 @@ func TestWorkspaceCheckResultsPermissions(t *testing.T) {
 }
 
 func TestSelfcheckExitCode(t *testing.T) {
-	hard := []checkResult{{Name: "a", Pass: false}, {Name: "b", Pass: true}}
+	hard := []checkResult{{Name: "a", Kind: kindHard, Pass: false}, {Name: "b", Kind: kindHard, Pass: true}}
 	if got := selfcheckExitCode(hard, false); got != 1 {
 		t.Errorf("hard failure: exit=%d, want 1", got)
 	}
-	warn := []checkResult{{Name: "a", Pass: false, Warn: true}, {Name: "b", Pass: true}}
+	warn := []checkResult{{Name: "a", Kind: kindWarn, Pass: false}, {Name: "b", Kind: kindHard, Pass: true}}
 	if got := selfcheckExitCode(warn, false); got != 0 {
 		t.Errorf("warn-only failure without --strict: exit=%d, want 0", got)
 	}
 	if got := selfcheckExitCode(warn, true); got != 1 {
 		t.Errorf("warn failure with --strict: exit=%d, want 1", got)
 	}
-	ok := []checkResult{{Name: "a", Pass: true}, {Name: "b", Pass: true, NA: true}}
+	ok := []checkResult{{Name: "a", Kind: kindHard, Pass: true}, {Name: "b", Kind: kindNA, Pass: true}}
 	if got := selfcheckExitCode(ok, true); got != 0 {
 		t.Errorf("all pass: exit=%d, want 0", got)
 	}
@@ -539,9 +533,9 @@ func TestSelfcheckRootCheckFails(t *testing.T) {
 func TestRenderSelfcheck(t *testing.T) {
 	var b bytes.Buffer
 	results := []checkResult{
-		{Name: "a", Pass: true},
-		{Name: "b", Pass: false, Warn: true, Detail: "opened for write"},
-		{Name: "c", Pass: true, NA: true},
+		{Name: "a", Kind: kindHard, Pass: true},
+		{Name: "b", Kind: kindWarn, Pass: false, Detail: "opened for write"},
+		{Name: "c", Kind: kindNA, Pass: true},
 	}
 	renderSelfcheck(&b, results, false)
 	s := b.String()
@@ -558,12 +552,12 @@ func TestRenderSelfcheck(t *testing.T) {
 
 	// Two warnings pluralize; a clean run prints no count.
 	b.Reset()
-	renderSelfcheck(&b, append(results, checkResult{Name: "d", Pass: false, Warn: true}), false)
+	renderSelfcheck(&b, append(results, checkResult{Name: "d", Kind: kindWarn, Pass: false}), false)
 	if !strings.Contains(b.String(), "selfcheck: PASS (2 warnings)") {
 		t.Errorf("want plural warning count:\n%s", b.String())
 	}
 	b.Reset()
-	renderSelfcheck(&b, []checkResult{{Name: "a", Pass: true}}, false)
+	renderSelfcheck(&b, []checkResult{{Name: "a", Kind: kindHard, Pass: true}}, false)
 	if s := b.String(); !strings.Contains(s, "selfcheck: PASS") || strings.Contains(s, "warning") {
 		t.Errorf("clean run should have no warning count:\n%s", s)
 	}
@@ -602,28 +596,35 @@ func TestRunSelfcheckJSON(t *testing.T) {
 }
 
 func TestCheckResultJSONShape(t *testing.T) {
-	b, err := json.Marshal(checkResult{Name: "x", Pass: true, Warn: true, NA: true})
-	if err != nil {
-		t.Fatal(err)
+	// kind is always present and carries the enum value.
+	for kind, want := range map[checkKind]string{kindHard: "hard", kindWarn: "warn", kindNA: "na"} {
+		b, err := json.Marshal(checkResult{Name: "x", Pass: true, Kind: kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m["kind"] != want {
+			t.Errorf("kind=%s: JSON kind=%v, want %q: %s", kind, m["kind"], want, b)
+		}
+		if _, ok := m["detail"]; ok {
+			t.Errorf("kind=%s: empty detail should be omitted: %s", kind, b)
+		}
 	}
+
+	// The old warn/na booleans are gone.
+	b, _ := json.Marshal(checkResult{Name: "x", Pass: true, Kind: kindNA})
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["warn"] != true || m["na"] != true {
-		t.Errorf("warn/na should be present and true: %s", b)
-	}
-
-	b, _ = json.Marshal(checkResult{Name: "x", Pass: true})
-	m = nil
-	if err := json.Unmarshal(b, &m); err != nil {
-		t.Fatal(err)
-	}
 	if _, ok := m["warn"]; ok {
-		t.Errorf("warn should be omitted when unset: %s", b)
+		t.Errorf("warn should no longer be emitted: %s", b)
 	}
 	if _, ok := m["na"]; ok {
-		t.Errorf("na should be omitted when unset: %s", b)
+		t.Errorf("na should no longer be emitted: %s", b)
 	}
 }
 
