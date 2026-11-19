@@ -65,7 +65,7 @@ func codexDenyReason(outcome Outcome) string {
 	case kindAsk:
 		return "shizo asks for confirmation, but Codex has no ask — denied instead: " + outcome.Reason
 	case kindUndecided:
-		return "no allow rule matched, and Codex has no ask — denied instead: " + outcome.Reason
+		return "no allow rule matched, and Codex has no ask — denied instead"
 	default:
 		return outcome.Reason
 	}

@@ -22,8 +22,9 @@ type Harness interface {
 	// pipeline defers to the agent's own permission flow.
 	Handles(in hookInput) bool
 	// Emit writes the harness-specific decision envelope for outcome to w and
-	// returns the process exit code (0 = allow/ask, 2 = deny). cfg is nil when
-	// the rule store could not be loaded.
+	// returns the process exit code (0 = allow/ask, 2 = deny). cfg is nil only
+	// on the unresolvable-home path (runHarness denied there already); treat a
+	// nil cfg as not-automode.
 	Emit(w io.Writer, in hookInput, cfg *config, outcome Outcome) int
 }
 

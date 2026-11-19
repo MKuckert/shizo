@@ -59,11 +59,15 @@ func lockdownAttestDir(t *testing.T, root string) {
 	})
 }
 
-func runWith(t *testing.T, input string) (int, string) {
+func runWithH(t *testing.T, h Harness, input string) (int, string) {
 	t.Helper()
 	var out bytes.Buffer
-	rc := runHarness(claudeHarness{}, strings.NewReader(input), &out)
+	rc := runHarness(h, strings.NewReader(input), &out)
 	return rc, out.String()
+}
+
+func runWith(t *testing.T, input string) (int, string) {
+	return runWithH(t, claudeHarness{}, input)
 }
 
 func decisionOf(t *testing.T, body string) string {
@@ -108,6 +112,81 @@ func TestRunDenyExit2(t *testing.T) {
 	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"/tmp"}`)
 	if rc != 2 || decisionOf(t, out) != "deny" {
 		t.Errorf("deny: rc=%d out=%s", rc, out)
+	}
+}
+
+// End-to-end pipeline runs for the non-Claude adapters: raw stdin in, exit
+// code + envelope out, with no unit-level Emit stubbing.
+func TestRunCodexEndToEnd(t *testing.T) {
+	setupRun(t, "allow git status ANY\ndeny git push ANY\n")
+	cases := []struct {
+		name           string
+		in             string
+		wantDecision   string
+		wantReason     string // substring; "" = unchecked
+		wantUpdatedCmd string // "" = absent
+	}{
+		{"allow re-emits updatedInput", `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`, "allow", "", "git status"},
+		{"deny keeps its reason", `{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"/tmp"}`, "deny", "", ""},
+		{"fallthrough maps to deny", `{"tool_name":"Bash","tool_input":{"command":"git fetch"},"cwd":"/tmp"}`, "deny", "no allow rule matched", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rc, out := runWithH(t, codexHarness{}, c.in)
+			if rc != 0 {
+				t.Fatalf("rc = %d, want 0 (codex always exits 0); out=%s", rc, out)
+			}
+			var obj struct {
+				Hook struct {
+					Decision string         `json:"permissionDecision"`
+					Reason   string         `json:"permissionDecisionReason"`
+					Updated  map[string]any `json:"updatedInput"`
+				} `json:"hookSpecificOutput"`
+			}
+			if err := json.Unmarshal([]byte(out), &obj); err != nil {
+				t.Fatalf("bad JSON %q: %v", out, err)
+			}
+			if obj.Hook.Decision != c.wantDecision {
+				t.Errorf("decision = %q, want %q", obj.Hook.Decision, c.wantDecision)
+			}
+			if c.wantReason != "" && !strings.Contains(obj.Hook.Reason, c.wantReason) {
+				t.Errorf("reason = %q, want substring %q", obj.Hook.Reason, c.wantReason)
+			}
+			if got, _ := obj.Hook.Updated["command"].(string); got != c.wantUpdatedCmd {
+				t.Errorf("updatedInput.command = %q, want %q", got, c.wantUpdatedCmd)
+			}
+		})
+	}
+}
+
+func TestRunCopilotEndToEnd(t *testing.T) {
+	setupRun(t, "allow git status ANY\ndeny git push ANY\n")
+	cases := []struct {
+		name         string
+		in           string
+		wantRC       int
+		wantContains string // "" = unchecked
+		wantEmpty    bool   // stdout must be empty
+	}{
+		{"allow", `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`, 0, `"permissionDecision":"allow"`, false},
+		{"deny exits 2 with reason", `{"toolName":"bash","toolArgs":{"command":"git push"},"cwd":"/tmp"}`, 2, `"permissionDecision":"deny"`, false},
+		{"fallthrough maps to deny", `{"toolName":"bash","toolArgs":{"command":"git fetch"},"cwd":"/tmp"}`, 2, "no allow rule matched", false},
+		{"non-bash defers to Copilot", `{"toolName":"view","toolArgs":{"file_path":"/x"},"cwd":"/tmp"}`, 0, "", true},
+		{"malformed input denies", `{not json`, 2, "malformed hook input", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rc, out := runWithH(t, copilotHarness{}, c.in)
+			if rc != c.wantRC {
+				t.Fatalf("rc = %d, want %d; out=%s", rc, c.wantRC, out)
+			}
+			if c.wantEmpty && out != "" {
+				t.Errorf("stdout = %q, want empty", out)
+			}
+			if c.wantContains != "" && !strings.Contains(out, c.wantContains) {
+				t.Errorf("stdout = %q, want substring %q", out, c.wantContains)
+			}
+		})
 	}
 }
 

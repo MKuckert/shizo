@@ -27,11 +27,11 @@ var version = "dev"
 
 // rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
 // It indexes the operator subcommands; each owns its own detailed usage const.
-const rootUsage = `shizo — a Claude Code PreToolUse hook that allowlists Bash
-commands at subcommand granularity. "hook pretooluse" is the hook entrypoint: it
-reads hook JSON on stdin and emits a decision. Every other subcommand is
-operator-only and never touches the hook pipeline; with no arguments this
-prints usage and exits (it never reads stdin).
+const rootUsage = `shizo — a fail-closed gate for agentic harnesses' shell tools
+that allowlists Bash commands at subcommand granularity. "hook <event>" is the
+hook entrypoint: it reads the harness's hook JSON on stdin and emits a
+decision. Every other subcommand is operator-only and never touches the hook
+pipeline; with no arguments this prints usage and exits (it never reads stdin).
 
 usage: shizo [command] [args]
 

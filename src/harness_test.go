@@ -128,7 +128,7 @@ func TestCodexEmit(t *testing.T) {
 		{"allow", Outcome{kindAllow, "rule: allow git push ANY"}, "allow", "", true},
 		{"deny", Outcome{kindDeny, "rule: deny git push HAS --force"}, "deny", "rule: deny git push HAS --force", false},
 		{"ask downgrades to deny", Outcome{kindAsk, "ask rule matched"}, "deny", "shizo asks for confirmation, but Codex has no ask — denied instead: ask rule matched", false},
-		{"fallthrough downgrades to deny", Outcome{kindUndecided, "no rule matches: git push"}, "deny", "no allow rule matched, and Codex has no ask — denied instead: no rule matches: git push", false},
+		{"fallthrough downgrades to deny", Outcome{kindUndecided, "no rule matches: git push"}, "deny", "no allow rule matched, and Codex has no ask — denied instead", false},
 		{"empty deny reason gets a fallback", Outcome{kindDeny, ""}, "deny", "denied by shizo", false},
 	}
 	for _, c := range cases {
@@ -204,6 +204,8 @@ func TestCopilotParse(t *testing.T) {
 		{"bash with null args", `{"toolName":"bash","toolArgs":null}`, "bash", "", "empty command"},
 		{"bash with blank command", `{"toolName":"bash","toolArgs":{"command":"  "}}`, "bash", "", "empty command"},
 		{"bash with malformed args", `{"toolName":"bash","toolArgs":123}`, "bash", "", "malformed tool args"},
+		{"mixed payload prefers snake_case", `{"toolName":"bash","toolArgs":{"command":"from-camel"},"tool_name":"Bash","tool_input":{"command":"from-snake"}}`, "Bash", "from-snake", ""},
+		{"non-string command in args object", `{"toolName":"bash","toolArgs":{"command":42}}`, "bash", "", "malformed tool args"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -281,7 +283,7 @@ func TestCopilotEmit(t *testing.T) {
 		{"allow", bashIn, decision, Outcome{kindAllow, "rule: allow git push ANY"}, 0, `{"permissionDecision":"allow"}`, ""},
 		{"deny", bashIn, decision, Outcome{kindDeny, "denied by rule: deny git push HAS --force"}, 2, "", "denied by rule: deny git push HAS --force"},
 		{"ask downgrades to deny", bashIn, decision, Outcome{kindAsk, "ask rule matched"}, 2, "", "shizo asks for confirmation, but Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: ask rule matched"},
-		{"fallthrough downgrades to deny", bashIn, decision, Outcome{kindUndecided, "no rule matches: git push"}, 2, "", "no allow rule matched, and Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: no rule matches: git push"},
+		{"fallthrough downgrades to deny", bashIn, decision, Outcome{kindUndecided, "no rule matches: git push"}, 2, "", "no allow rule matched, and Copilot auto-approves ask (github/copilot-cli#3590) — denied instead"},
 		{"automode fallthrough defers", bashIn, auto, Outcome{kindUndecided, "no rule matches: git push"}, 0, "", ""},
 		{"automode ask rule does not defer", bashIn, auto, Outcome{kindAsk, "ask rule matched"}, 2, "", "shizo asks for confirmation, but Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: ask rule matched"},
 		{"non-bash tool defers", nonBashIn, decision, Outcome{kindUndecided, "no shizo policy for tool: view"}, 0, "", ""},

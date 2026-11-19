@@ -1,9 +1,10 @@
 # shizo
 
-`shizo` is a fail-closed `PreToolUse` hook for Agentic Harnesses providing
-a Bash tool. It parses shell syntax, extracts every command from pipelines and
-command lists, resolves executables through `PATH`, and applies an argv-based
-rule set. Anything it cannot verify statically is denied.
+`shizo` is a fail-closed permission gate for the Bash tool of agentic coding
+harnesses (Claude Code, Codex, Copilot CLI, pi, OpenCode). It parses shell
+syntax, extracts every command from pipelines and command lists, resolves
+executables through `PATH`, and applies an argv-based rule set. Anything it
+cannot verify statically is denied.
 
 ## Why?
 

@@ -14,7 +14,7 @@ import (
 // (§2) exactly as the hook would, but operator-facing: no stdin hook JSON is
 // required, nothing is logged, and no hook decision JSON is emitted. It exists
 // to answer "what would the gate do with this command?" without issuing it
-// through Claude Code. See docs/ARCHITECTURE.md.
+// through the agent. See docs/ARCHITECTURE.md.
 //
 // The one wrinkle is the sandbox gate (§2 step 3): operators run `test` outside
 // the sandbox, where decide() denies everything. --assume-sandboxed sets
@@ -31,7 +31,8 @@ Flags:
   --cwd DIR           working directory for resolution (default: current dir)
   --assume-sandboxed  treat the process as sandboxed (skip the sandbox gate)
   --json              emit the machine-readable log-line shape instead of a table
-  --stdin-json        read a full hook JSON from stdin (command and cwd from it)`
+  --stdin-json        read a full hook JSON from stdin (Claude/Codex or Copilot
+                      format; command and cwd from it)`
 
 func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// Help only when it's the leading token — otherwise `-h`/`--help` belong to
@@ -56,7 +57,9 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	if *stdinJSON {
 		raw, _ := io.ReadAll(stdin)
-		in, reason := parseSnakeInput(raw)
+		// copilotHarness.Parse accepts both payload shapes (snake_case and
+		// camelCase), so a captured hook JSON from any harness replays here.
+		in, reason := copilotHarness{}.Parse(raw)
 		if reason != "" {
 			fmt.Fprintf(stderr, "test: %s\n", reason)
 			return 2

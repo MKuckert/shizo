@@ -169,7 +169,7 @@ func copilotDenyReason(outcome Outcome) string {
 	case kindAsk:
 		return "shizo asks for confirmation, but Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: " + outcome.Reason
 	case kindUndecided:
-		return "no allow rule matched, and Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: " + outcome.Reason
+		return "no allow rule matched, and Copilot auto-approves ask (github/copilot-cli#3590) — denied instead"
 	default:
 		return outcome.Reason
 	}

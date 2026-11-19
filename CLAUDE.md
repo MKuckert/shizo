@@ -84,6 +84,8 @@ embedded `shizo.sh` wrapper, the `pi-shizo.ts` extension, and the
 | `resolve.go`    | command resolution: safe builtins, uncond-deny, PATH lookup |
 | `validate.go`   | `shizo validate` — operator-only rule linter (all errors + semantic warnings) |
 | `info.go`       | `shizo info` — operator-only; prints the install's resolved paths |
+| `test.go`       | `shizo test` — operator dry-run of the evaluation pipeline |
+| `install.go`    | renders and installs the embedded shizo.sh/pi/opencode assets, idempotently |
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
 | `edit.go`       | `shizo edit` — operator-only; opens a tier in $EDITOR and attests it |
