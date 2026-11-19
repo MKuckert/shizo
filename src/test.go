@@ -56,7 +56,7 @@ func runTest(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	if *stdinJSON {
 		raw, _ := io.ReadAll(stdin)
-		in, reason := parseInput(raw)
+		in, reason := parseSnakeInput(raw)
 		if reason != "" {
 			fmt.Fprintf(stderr, "test: %s\n", reason)
 			return 2

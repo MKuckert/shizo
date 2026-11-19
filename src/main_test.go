@@ -62,7 +62,7 @@ func lockdownAttestDir(t *testing.T, root string) {
 func runWith(t *testing.T, input string) (int, string) {
 	t.Helper()
 	var out bytes.Buffer
-	rc := runHookPreToolUse(strings.NewReader(input), &out)
+	rc := runHarness(claudeHarness{}, strings.NewReader(input), &out)
 	return rc, out.String()
 }
 
@@ -129,7 +129,7 @@ func TestRunHelp(t *testing.T) {
 		want string // a substring unique to the expected usage
 	}{
 		{nil, "usage: shizo [command]"},
-		{[]string{"hook"}, "usage: shizo hook pretooluse"},
+		{[]string{"hook"}, "usage: shizo hook <event>"},
 		{[]string{"validate"}, "usage: shizo validate"},
 		{[]string{"attest"}, "usage: shizo attest"},
 		{[]string{"edit"}, "usage: shizo edit"},

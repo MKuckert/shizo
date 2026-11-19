@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -37,7 +36,7 @@ prints usage and exits (it never reads stdin).
 usage: shizo [command] [args]
 
 Commands:
-  hook <event> hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
+  hook <event> hook mode: read the harness's hook JSON on stdin, emit a decision
   validate    lint rule files (all errors + semantic warnings)
   attest      record operator approval of a rule tier (required before it is trusted)
   edit        open a rule tier in $EDITOR and attest it afterwards
@@ -68,8 +67,10 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		switch args[0] {
 		case "hook":
 			// Unknown/missing event must never fall through to reading stdin.
-			if len(args) > 1 && args[1] == "pretooluse" {
-				return runHookPreToolUse(stdin, stdout)
+			if len(args) > 1 {
+				if h, ok := harnessByName(args[1]); ok {
+					return runHarness(h, stdin, stdout)
+				}
 			}
 			fmt.Fprintf(stderr, "shizo: hook requires a supported event\n\n%s\n", hookUsage)
 			return 2
@@ -133,19 +134,19 @@ func runHelp(args []string, stdout io.Writer) int {
 	return 0
 }
 
-// hookUsage documents the hook entrypoint invoked by shizo.sh. This is
-// the only subcommand that reads stdin and logs decisions.
-const hookUsage = `shizo hook pretooluse — the PreToolUse hook entrypoint.
+// hookUsage documents the hook entrypoints invoked by shizo.sh (and, for the
+// other events, directly by the harness). This is the only subcommand that
+// reads stdin and logs decisions.
+const hookUsage = `shizo hook <event> — the hook entrypoint.
 
-usage: shizo hook pretooluse
+usage: shizo hook <event>
 
 Events:
-  pretooluse  the only supported event
+  pretooluse  Claude Code (also spoken by the pi and opencode plugins via shizo.sh)
 
-Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
-evaluates the command against the rule tiers, and emits a decision object on
-stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
-(see $SHIZO_DIR/logs).`
+The event reads its harness's hook JSON on stdin, evaluates the command
+against the rule tiers, and emits that harness's decision envelope on stdout.
+The only mode that logs (see $SHIZO_DIR/logs).`
 
 // hookRootFn resolves the install root for hook mode via the password
 // database (getpwuid), not env vars. An agent that can set $HOME or
@@ -159,70 +160,6 @@ func defaultHookRoot() string {
 		return ""
 	}
 	return filepath.Join(u.HomeDir, ".shizo")
-}
-
-func runHookPreToolUse(stdin io.Reader, stdout io.Writer) int {
-	raw, _ := io.ReadAll(stdin)
-	in, inErr := parseInput(raw)
-
-	root := hookRootFn()
-	if root == "" {
-		emitDecision(stdout, Outcome{kindDeny, "cannot determine home directory for rules"})
-		return 2
-	}
-	gPath := filepath.Join(root, "global", "rules")
-	cfg := loadConfig(gPath, projectRulesPathFor(in.Cwd), root)
-
-	var (
-		outcome Outcome
-		logs    []cmdLog
-	)
-	if inErr != "" {
-		outcome = Outcome{kindDeny, inErr}
-	} else {
-		outcome, logs = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
-	}
-
-	logDecision(in, outcome, logs) // best effort; never changes the decision
-
-	switch outcome.Kind {
-	case kindDeny:
-		emitDecision(stdout, outcome)
-		return 2
-	default: // allow / ask
-		// §2.1: defer only unmatched fallthrough, not explicit ask rules
-		if cfg.returnMode == "automode" && outcome.Kind == kindUndecided {
-			fmt.Fprint(stdout, "defer")
-			return 0
-		}
-		emitDecision(stdout, outcome)
-		return 0
-	}
-}
-
-// parseInput reads the hook JSON (§2 step 1). Returns a deny reason on
-// malformed JSON or an absent/empty command.
-func parseInput(raw []byte) (hookInput, string) {
-	var in hookInput
-	if err := json.Unmarshal(raw, &in); err != nil {
-		return in, "malformed hook input: " + err.Error()
-	}
-	if strings.TrimSpace(in.ToolInput.Command) == "" {
-		return in, "empty command"
-	}
-	return in, ""
-}
-
-func emitDecision(w io.Writer, outcome Outcome) {
-	obj := map[string]any{
-		"hookSpecificOutput": map[string]any{
-			"hookEventName":            "PreToolUse",
-			"permissionDecision":       outcome.Kind.String(),
-			"permissionDecisionReason": outcome.Reason,
-		},
-	}
-	b, _ := json.Marshal(obj)
-	w.Write(b)
 }
 
 func currentEnviron() environ {
