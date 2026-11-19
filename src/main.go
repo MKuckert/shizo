@@ -143,6 +143,7 @@ usage: shizo hook <event>
 
 Events:
   pretooluse  Claude Code (also spoken by the pi and opencode plugins via shizo.sh)
+  codex       OpenAI Codex (registered in hooks.json, see docs/CODEX.md)
 
 The event reads its harness's hook JSON on stdin, evaluates the command
 against the rule tiers, and emits that harness's decision envelope on stdout.

@@ -68,12 +68,12 @@ func emitEnvelope(t *testing.T, body string) map[string]any {
 // unmatched fallthrough (kindUndecided), never an explicit ask rule.
 func TestClaudeEmit(t *testing.T) {
 	cases := []struct {
-		name       string
-		cfg        *config
-		outcome    Outcome
-		wantExit   int
+		name         string
+		cfg          *config
+		outcome      Outcome
+		wantExit     int
 		wantDecision string // "" = no envelope (defer sentinel)
-		wantDefer  bool
+		wantDefer    bool
 	}{
 		{"allow", &config{returnMode: "decision"}, Outcome{kindAllow, "rule: allow git status ANY"}, 0, "allow", false},
 		{"ask rule", &config{returnMode: "decision"}, Outcome{kindAsk, "ask rule matched"}, 0, "ask", false},
@@ -105,6 +105,58 @@ func TestClaudeEmit(t *testing.T) {
 			}
 			if env["permissionDecisionReason"] != c.outcome.Reason {
 				t.Errorf("reason = %v, want %q", env["permissionDecisionReason"], c.outcome.Reason)
+			}
+		})
+	}
+}
+
+// codex Emit: allow re-emits the command as updatedInput (the documented
+// no-block rewrite shape); ask and the unmatched fallthrough downgrade to
+// deny because Codex proceeds on both ("ask" is parsed-but-unsupported, empty
+// output continues). Codex always exits 0 — the decision rides in the JSON,
+// and every non-zero exit without a stderr reason fails open.
+func TestCodexEmit(t *testing.T) {
+	in := hookInput{}
+	in.ToolInput.Command = "git push"
+	cases := []struct {
+		name         string
+		outcome      Outcome
+		wantDecision string
+		wantReason   string // "" = no reason field expected; "<updated>" = updatedInput check
+		wantUpdate   bool
+	}{
+		{"allow", Outcome{kindAllow, "rule: allow git push ANY"}, "allow", "", true},
+		{"deny", Outcome{kindDeny, "rule: deny git push HAS --force"}, "deny", "rule: deny git push HAS --force", false},
+		{"ask downgrades to deny", Outcome{kindAsk, "ask rule matched"}, "deny", "shizo asks for confirmation, but Codex has no ask — denied instead: ask rule matched", false},
+		{"fallthrough downgrades to deny", Outcome{kindUndecided, "no rule matches: git push"}, "deny", "no allow rule matched, and Codex has no ask — denied instead: no rule matches: git push", false},
+		{"empty deny reason gets a fallback", Outcome{kindDeny, ""}, "deny", "denied by shizo", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var out bytes.Buffer
+			rc := codexHarness{}.Emit(&out, in, nil, c.outcome)
+			if rc != 0 {
+				t.Fatalf("exit = %d, want 0 (Codex blocks only on exit-0 JSON or exit-2+stderr)", rc)
+			}
+			env := emitEnvelope(t, out.String())
+			if env["hookEventName"] != "PreToolUse" {
+				t.Errorf("hookEventName = %v, want PreToolUse", env["hookEventName"])
+			}
+			if env["permissionDecision"] != c.wantDecision {
+				t.Errorf("permissionDecision = %v, want %q", env["permissionDecision"], c.wantDecision)
+			}
+			if c.wantUpdate {
+				upd, ok := env["updatedInput"].(map[string]any)
+				if !ok || upd["command"] != "git push" {
+					t.Errorf("updatedInput = %v, want {command: git push}", env["updatedInput"])
+				}
+			} else if _, present := env["updatedInput"]; present {
+				t.Errorf("updatedInput present on a non-allow: %v", env["updatedInput"])
+			}
+			if c.wantReason != "" {
+				if env["permissionDecisionReason"] != c.wantReason {
+					t.Errorf("reason = %v, want %q", env["permissionDecisionReason"], c.wantReason)
+				}
 			}
 		})
 	}

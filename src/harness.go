@@ -31,6 +31,7 @@ type Harness interface {
 // an adapter file and an entry here (docs/ARCHITECTURE.md).
 var harnesses = map[string]Harness{
 	"pretooluse": claudeHarness{},
+	"codex":      codexHarness{},
 }
 
 func harnessByName(name string) (Harness, bool) {
