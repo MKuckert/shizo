@@ -32,6 +32,7 @@ type Harness interface {
 var harnesses = map[string]Harness{
 	"pretooluse": claudeHarness{},
 	"codex":      codexHarness{},
+	"copilot":    copilotHarness{},
 }
 
 func harnessByName(name string) (Harness, bool) {

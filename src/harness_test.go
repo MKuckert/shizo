@@ -179,3 +179,140 @@ func TestDispatchHookUnknownEvent(t *testing.T) {
 		}
 	}
 }
+
+// copilot Parse accepts both payload shapes (native camelCase, PascalCase
+// PreToolUse snake_case) and three tool-args encodings (object, JSON string
+// of an object, bare command string). A non-bash tool parses cleanly with an
+// empty command so the pipeline defers instead of denying.
+func TestCopilotParse(t *testing.T) {
+	cases := []struct {
+		name     string
+		raw      string
+		wantTool string
+		wantCmd  string
+		wantErr  string // substring of the deny reason; "" = no error
+	}{
+		{"camelCase object args", `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/w","sessionId":"s1"}`, "bash", "git status", ""},
+		{"snake_case object args", `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/w","session_id":"s1"}`, "Bash", "git status", ""},
+		{"camelCase JSON-string args", `{"toolName":"bash","toolArgs":"{\"command\":\"git status\"}"}`, "bash", "git status", ""},
+		{"camelCase bare-string args", `{"toolName":"bash","toolArgs":"git status"}`, "bash", "git status", ""},
+		{"snake_case JSON-string args", `{"tool_name":"Bash","tool_input":"{\"command\":\"git status\"}"}`, "Bash", "git status", ""},
+		{"non-bash tool defers", `{"toolName":"view","toolArgs":{"file_path":"/x"}}`, "view", "", ""},
+		{"malformed json", `{not json`, "", "", "malformed hook input"},
+		{"missing tool name", `{"toolArgs":{"command":"x"}}`, "", "", "missing tool name"},
+		{"bash with absent args", `{"toolName":"bash"}`, "bash", "", "empty command"},
+		{"bash with null args", `{"toolName":"bash","toolArgs":null}`, "bash", "", "empty command"},
+		{"bash with blank command", `{"toolName":"bash","toolArgs":{"command":"  "}}`, "bash", "", "empty command"},
+		{"bash with malformed args", `{"toolName":"bash","toolArgs":123}`, "bash", "", "malformed tool args"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in, err := copilotHarness{}.Parse([]byte(c.raw))
+			if (err != "") != (c.wantErr != "") {
+				t.Fatalf("err = %q, want presence of %q", err, c.wantErr)
+			}
+			if c.wantErr != "" && !strings.Contains(err, c.wantErr) {
+				t.Fatalf("err = %q, want substring %q", err, c.wantErr)
+			}
+			if err == "" {
+				if in.ToolName != c.wantTool {
+					t.Errorf("tool = %q, want %q", in.ToolName, c.wantTool)
+				}
+				if in.ToolInput.Command != c.wantCmd {
+					t.Errorf("command = %q, want %q", in.ToolInput.Command, c.wantCmd)
+				}
+			}
+		})
+	}
+}
+
+// copilot Handles gates only the shell tool, in either spelling.
+func TestCopilotHandles(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		want bool
+	}{
+		{"bash", true},
+		{"Bash", true},
+		{"view", false},
+		{"powershell", false},
+		{"", false},
+	} {
+		in := hookInput{}
+		in.ToolName = c.name
+		if got := (copilotHarness{}).Handles(in); got != c.want {
+			t.Errorf("Handles(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// copilotEmitBody decodes Copilot's bare top-level decision object.
+func copilotEmitBody(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(body), &obj); err != nil {
+		t.Fatalf("envelope is not JSON: %v\n%s", err, body)
+	}
+	return obj
+}
+
+// copilot Emit: allow and deferrals exit 0; deny exits 2 (Copilot merges the
+// stdout JSON with the exit-2 deny, so the reason survives). ask and the bash
+// fallthrough downgrade to deny in decision mode (auto-approval bug
+// github/copilot-cli#3590); automode defers only the fallthrough; a non-bash
+// tool always defers with empty output.
+func TestCopilotEmit(t *testing.T) {
+	bashIn := hookInput{}
+	bashIn.ToolName = "bash"
+	bashIn.ToolInput.Command = "git push"
+	nonBashIn := hookInput{}
+	nonBashIn.ToolName = "view"
+	decision := &config{returnMode: "decision"}
+	auto := &config{returnMode: "automode"}
+	cases := []struct {
+		name       string
+		in         hookInput
+		cfg        *config
+		outcome    Outcome
+		wantExit   int
+		wantBody   string // exact body; "" = empty output (defer)
+		wantReason string // checked when wantBody is unset
+	}{
+		{"allow", bashIn, decision, Outcome{kindAllow, "rule: allow git push ANY"}, 0, `{"permissionDecision":"allow"}`, ""},
+		{"deny", bashIn, decision, Outcome{kindDeny, "denied by rule: deny git push HAS --force"}, 2, "", "denied by rule: deny git push HAS --force"},
+		{"ask downgrades to deny", bashIn, decision, Outcome{kindAsk, "ask rule matched"}, 2, "", "shizo asks for confirmation, but Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: ask rule matched"},
+		{"fallthrough downgrades to deny", bashIn, decision, Outcome{kindUndecided, "no rule matches: git push"}, 2, "", "no allow rule matched, and Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: no rule matches: git push"},
+		{"automode fallthrough defers", bashIn, auto, Outcome{kindUndecided, "no rule matches: git push"}, 0, "", ""},
+		{"automode ask rule does not defer", bashIn, auto, Outcome{kindAsk, "ask rule matched"}, 2, "", "shizo asks for confirmation, but Copilot auto-approves ask (github/copilot-cli#3590) — denied instead: ask rule matched"},
+		{"non-bash tool defers", nonBashIn, decision, Outcome{kindUndecided, "no shizo policy for tool: view"}, 0, "", ""},
+		{"empty deny reason gets a fallback", bashIn, decision, Outcome{kindDeny, ""}, 2, "", "denied by shizo"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var out bytes.Buffer
+			rc := copilotHarness{}.Emit(&out, c.in, c.cfg, c.outcome)
+			if rc != c.wantExit {
+				t.Fatalf("exit = %d, want %d (body %q)", rc, c.wantExit, out.String())
+			}
+			if c.wantBody != "" {
+				if out.String() != c.wantBody {
+					t.Fatalf("body = %q, want %q", out.String(), c.wantBody)
+				}
+				return
+			}
+			if c.wantReason == "" {
+				if out.String() != "" {
+					t.Fatalf("body = %q, want empty (defer)", out.String())
+				}
+				return
+			}
+			obj := copilotEmitBody(t, out.String())
+			if obj["permissionDecision"] != "deny" {
+				t.Errorf("permissionDecision = %v, want deny", obj["permissionDecision"])
+			}
+			if obj["permissionDecisionReason"] != c.wantReason {
+				t.Errorf("reason = %v, want %q", obj["permissionDecisionReason"], c.wantReason)
+			}
+		})
+	}
+}
