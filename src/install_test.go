@@ -316,7 +316,7 @@ func TestInstallDivergentWrapperRefused(t *testing.T) {
 // a no-op.
 func TestInstallPiExtension(t *testing.T) {
 	engine := fakeEngine(t)
-	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	want, err := renderExtension(embeddedPiExtension, filepath.Join(engine, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestInstallPiExtensionUpdatesMovedBinary(t *testing.T) {
 	}
 
 	engineB := fakeEngine(t) // installExe now points at a second root
-	want, err := renderPiExtension(filepath.Join(engineB, "shizo.sh"))
+	want, err := renderExtension(embeddedPiExtension, filepath.Join(engineB, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +470,7 @@ func TestInstallPiExtensionUpdatesSymlinkedRender(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	target := filepath.Join(proj, ".pi", "extensions", "shizo.ts")
 
-	wantA, err := renderPiExtension(filepath.Join(engineA, "shizo.sh"))
+	wantA, err := renderExtension(embeddedPiExtension, filepath.Join(engineA, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +484,7 @@ func TestInstallPiExtensionUpdatesSymlinkedRender(t *testing.T) {
 	}
 
 	engineB := fakeEngine(t) // the binary moved to a second root
-	wantB, err := renderPiExtension(filepath.Join(engineB, "shizo.sh"))
+	wantB, err := renderExtension(embeddedPiExtension, filepath.Join(engineB, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -505,33 +505,44 @@ func TestInstallPiExtensionUpdatesSymlinkedRender(t *testing.T) {
 	}
 }
 
-// renderPiExtension and wrapperPathIn are exact inverses, including paths
-// with characters that need JSON escaping; the SHIZO_HOOK override survives
-// the render. An unrendered source copy (the placeholder still in place) is
-// recognized as a render, so re-installing a hand-copied source file fixes
-// it rather than refusing.
-func TestRenderPiExtensionRoundTrip(t *testing.T) {
-	for _, p := range []string{
-		"/home/u/.shizo/engine/shizo.sh",
-		`/tmp/we"ird\path/shizo.sh`,
-	} {
-		rendered, err := renderPiExtension(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(rendered), "process.env.SHIZO_HOOK ??") {
-			t.Error("SHIZO_HOOK override lost in rendered extension")
-		}
-		got, ok := wrapperPathIn(rendered)
-		if !ok || got != p {
-			t.Errorf("round-trip %q = %q, ok=%v", p, got, ok)
-		}
+// renderExtension and renderedWrapperPath are exact inverses for every
+// embedded extension, including paths with characters that need JSON
+// escaping; the SHIZO_HOOK override survives the render. An unrendered source
+// copy (the placeholder still in place) is recognized as a render, so
+// re-installing a hand-copied source file fixes it rather than refusing.
+func TestRenderExtensionRoundTrip(t *testing.T) {
+	sources := []struct {
+		name string
+		src  []byte
+	}{
+		{"pi", embeddedPiExtension},
+		{"opencode", embeddedOpencodePlugin},
 	}
-	if got, ok := wrapperPathIn(embeddedPiExtension); !ok || got != "__SHIZO_WRAPPER__" {
-		t.Errorf("unrendered source: %q, ok=%v; want recognized as a render", got, ok)
-	}
-	if _, ok := wrapperPathIn(append([]byte("x"), embeddedPiExtension...)); ok {
-		t.Error("modified source recognized as a render")
+	for _, s := range sources {
+		t.Run(s.name, func(t *testing.T) {
+			for _, p := range []string{
+				"/home/u/.shizo/engine/shizo.sh",
+				`/tmp/we"ird\path/shizo.sh`,
+			} {
+				rendered, err := renderExtension(s.src, p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(rendered), "process.env.SHIZO_HOOK ??") {
+					t.Error("SHIZO_HOOK override lost in rendered extension")
+				}
+				got, ok := renderedWrapperPath(s.src, rendered)
+				if !ok || got != p {
+					t.Errorf("round-trip %q = %q, ok=%v", p, got, ok)
+				}
+			}
+			if got, ok := renderedWrapperPath(s.src, s.src); !ok || got != "__SHIZO_WRAPPER__" {
+				t.Errorf("unrendered source: %q, ok=%v; want recognized as a render", got, ok)
+			}
+			if _, ok := renderedWrapperPath(s.src, append([]byte("x"), s.src...)); ok {
+				t.Error("modified source recognized as a render")
+			}
+		})
 	}
 }
 
@@ -540,7 +551,7 @@ func TestRenderPiExtensionRoundTrip(t *testing.T) {
 // gone.
 func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
 	engine := fakeEngine(t)
-	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	want, err := renderExtension(embeddedPiExtension, filepath.Join(engine, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +588,7 @@ func TestInstallPiExtensionMigratesStaleSymlink(t *testing.T) {
 // the regular copy.
 func TestInstallPiExtensionReplacesDanglingSymlink(t *testing.T) {
 	engine := fakeEngine(t)
-	want, err := renderPiExtension(filepath.Join(engine, "shizo.sh"))
+	want, err := renderExtension(embeddedPiExtension, filepath.Join(engine, "shizo.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -637,12 +648,161 @@ func TestInstallPiExtensionRefusals(t *testing.T) {
 	}
 }
 
+// The plugin is copied as a regular file (never a symlink) with the rendered
+// content (the materialized wrapper path written in); re-running is a no-op.
+func TestInstallOpencodePlugin(t *testing.T) {
+	engine := fakeEngine(t)
+	want, err := renderExtension(embeddedOpencodePlugin, filepath.Join(engine, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proj, home := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+
+	cases := []struct {
+		name, target string
+		args         []string
+	}{
+		{"project default", filepath.Join(proj, ".opencode", "plugins", "shizo.js"), []string{"opencode-plugin"}},
+		{"project flag", filepath.Join(proj, ".opencode", "plugins", "shizo.js"), []string{"opencode-plugin", "--project"}},
+		{"global", filepath.Join(home, ".config", "opencode", "plugins", "shizo.js"), []string{"opencode-plugin", "--global"}},
+	}
+	for _, c := range cases {
+		os.RemoveAll(filepath.Join(proj, ".opencode"))
+		os.RemoveAll(filepath.Join(home, ".config", "opencode"))
+		code, out, errb := runInstallIn(t, proj, c.args...)
+		if code != 0 || !strings.Contains(out, "installed opencode plugin") {
+			t.Fatalf("%s: code=%d out=%q err=%q", c.name, code, out, errb)
+		}
+		fi, err := os.Lstat(c.target)
+		if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+			t.Fatalf("%s: target = %v, %v; want a regular file", c.name, fi.Mode(), err)
+		}
+		if fi.Mode().Perm() != 0o644 {
+			t.Errorf("%s: mode = %v, want 0644", c.name, fi.Mode())
+		}
+		if got, err := os.ReadFile(c.target); err != nil || !bytes.Equal(got, want) {
+			t.Errorf("%s: content differs from the rendered plugin: %v", c.name, err)
+		}
+		code, out, _ = runInstallIn(t, proj, c.args...)
+		if code != 0 || !strings.Contains(out, "already installed") {
+			t.Errorf("%s rerun: code=%d out=%q", c.name, code, out)
+		}
+	}
+}
+
+// The plugin spawns the wrapper on every shell call, so an opencode install
+// materializes it next to the binary — including when the plugin itself is
+// already installed (a bare release binary must self-install completely).
+func TestInstallOpencodePluginMaterializesWrapper(t *testing.T) {
+	engine := fakeEngine(t)
+	wrapper := filepath.Join(engine, "shizo.sh")
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	code, out, errb := runInstallIn(t, proj, "opencode-plugin")
+	if code != 0 || !strings.Contains(out, "installed opencode plugin") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	assertWrapper(t, wrapper)
+
+	// Re-run: the plugin is already installed, but the wrapper must still be
+	// ensured.
+	if err := os.Remove(wrapper); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ = runInstallIn(t, proj, "opencode-plugin")
+	if code != 0 || !strings.Contains(out, "already installed") {
+		t.Fatalf("rerun: code=%d out=%q", code, out)
+	}
+	assertWrapper(t, wrapper)
+}
+
+// If the binary moved since a previous opencode install, the installed
+// plugin's wrapper path is updated in place rather than refused; a hand edit
+// is not a previous render and is still refused.
+func TestInstallOpencodePluginUpdatesMovedBinary(t *testing.T) {
+	fakeEngine(t) // first root
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	target := filepath.Join(proj, ".opencode", "plugins", "shizo.js")
+
+	code, out, errb := runInstallIn(t, proj, "opencode-plugin")
+	if code != 0 || !strings.Contains(out, "installed opencode plugin") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+
+	engineB := fakeEngine(t) // installExe now points at a second root
+	want, err := renderExtension(embeddedOpencodePlugin, filepath.Join(engineB, "shizo.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errb = runInstallIn(t, proj, "opencode-plugin")
+	if code != 0 || !strings.Contains(out, "installed opencode plugin") {
+		t.Fatalf("rerun: code=%d out=%q err=%q", code, out, errb)
+	}
+	if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("content not updated to the new wrapper path: %v", err)
+	}
+
+	// A hand edit is not a previous render: refused, never overwritten.
+	got, _ := os.ReadFile(target)
+	got[len(got)-1] = 'x'
+	if err := os.WriteFile(target, got, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errb = runInstallIn(t, proj, "opencode-plugin")
+	if code != 1 || !strings.Contains(errb, "different content") {
+		t.Errorf("hand edit: code=%d err=%q", code, errb)
+	}
+	if b, _ := os.ReadFile(target); !bytes.Equal(b, got) {
+		t.Error("hand-edited plugin was overwritten")
+	}
+}
+
+func TestInstallOpencodePluginRefusals(t *testing.T) {
+	fakeEngine(t)
+	proj := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	if code, _, _ := runInstallIn(t, proj, "opencode-plugin", "--local"); code != 2 {
+		t.Errorf("--local: code=%d, want 2", code)
+	}
+
+	target := filepath.Join(proj, ".opencode", "plugins", "shizo.js")
+	os.MkdirAll(filepath.Dir(target), 0o755)
+	os.WriteFile(target, []byte("mine"), 0o644)
+	code, _, errb := runInstallIn(t, proj, "opencode-plugin")
+	if code != 1 || !strings.Contains(errb, "already exists with different content") {
+		t.Errorf("existing file: code=%d err=%q", code, errb)
+	}
+	if b, _ := os.ReadFile(target); string(b) != "mine" {
+		t.Errorf("existing file was overwritten: %q", b)
+	}
+
+	// A directory at the target is refused, never written into.
+	proj2 := t.TempDir()
+	dirTarget := filepath.Join(proj2, ".opencode", "plugins", "shizo.js")
+	if err := os.MkdirAll(dirTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errb = runInstallIn(t, proj2, "opencode-plugin")
+	if code != 1 || !strings.Contains(errb, "already exists") {
+		t.Errorf("directory target: code=%d err=%q", code, errb)
+	}
+	if entries, err := os.ReadDir(dirTarget); err != nil || len(entries) != 0 {
+		t.Errorf("directory target modified: %v, %v", entries, err)
+	}
+}
+
 func TestInstallHelp(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := runInstall([]string{"--help"}, &out, &errb); code != 0 {
 		t.Fatalf("exit = %d", code)
 	}
-	if !strings.Contains(out.String(), "shizo install claude-hook") {
+	if !strings.Contains(out.String(), "shizo install claude-hook") ||
+		!strings.Contains(out.String(), "opencode-plugin") {
 		t.Errorf("stdout = %q", out.String())
 	}
 }

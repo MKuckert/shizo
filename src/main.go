@@ -42,7 +42,7 @@ Commands:
   edit        open a rule tier in $EDITOR and attest it afterwards
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
-  install     register the Claude Code hook or the pi extension
+  install     register the Claude Code hook, pi extension, or opencode plugin
   info        print the paths shizo resolves (rules, logs, engine, hook command)
   docs        view the embedded operator docs (list with no argument)
   help [cmd]  show this overview, or detailed usage for a command
