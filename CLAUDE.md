@@ -2,11 +2,14 @@
 
 ## What this is
 
-`shizo` is a Claude Code `PreToolUse` hook (matcher `Bash`) that allowlists
-Bash commands at **subcommand granularity**. It parses each command with
-`mvdan.cc/sh/v3/syntax`, splits pipes and `&&`/`||`/`;` chains, resolves every
-command against the inherited `PATH` plus a configured trusted-dir set, and
-matches argv tokens against a line-oriented rule DSL.
+`shizo` is a fail-closed gate for agentic harnesses' shell tools that
+allowlists Bash commands at **subcommand granularity**. It parses each command
+with `mvdan.cc/sh/v3/syntax`, splits pipes and `&&`/`||`/`;` chains, resolves
+every command against the inherited `PATH` plus a configured trusted-dir set,
+and matches argv tokens against a line-oriented rule DSL. Claude Code's
+`PreToolUse` hook (matcher `Bash`) is the reference integration; Codex,
+Copilot CLI, pi, and OpenCode attach through per-harness adapters (see Layout)
+that share the same decision pipeline.
 
 **Fail-closed is the core invariant:** anything that cannot be statically
 verified is denied. When in doubt, deny — never widen behavior to make a case
@@ -14,7 +17,8 @@ verified is denied. When in doubt, deny — never widen behavior to make a case
 
 The `docs/` folder is the authoritative design reference — `ARCHITECTURE.md`
 (decisions, residual risks), `EVALUATION.md` (the ordered pipeline), `RULES.md`
-(the DSL), and `CLAUDE_CODE_HOOKS.md` (the hook I/O contract). Update the
+(the DSL), `CLAUDE_CODE_HOOKS.md` (the hook I/O contract), and per-harness
+notes in `CODEX.md`, `COPILOT.md`, `PI.md`, and `OPENCODE.md`. Update the
 relevant doc when you change the design. The original design plan is archived
 under `plans/`.
 
@@ -62,13 +66,17 @@ directives). Exit 0 = no errors (warnings allowed), 1 = errors, 2 = usage.
 ## Layout
 
 The Go module root is the repo root; the hook ships from `src/` (Go, plus the
-embedded `shizo.sh` wrapper and `pi-shizo.ts` extension), and a single root
-file embeds the docs.
+embedded `shizo.sh` wrapper, the `pi-shizo.ts` extension, and the
+`opencode-shizo.js` plugin), and a single root file embeds the docs.
 
 | File            | Responsibility                                             |
 | --------------- | ---------------------------------------------------------- |
 | `docs.go`       | root-level embed of `docs/*.md`, served by `shizo docs`    |
-| `main.go`       | CLI dispatch + help; hook I/O: read JSON stdin, emit decision JSON, logging |
+| `main.go`       | CLI dispatch + help; hook I/O driver and logging           |
+| `harness.go`    | harness interface (Parse/Handles/Emit) + registry; shared `runHarness` driver |
+| `harness_claude.go` | Claude Code adapter — the reference envelope (`hook pretooluse`) |
+| `harness_codex.go`  | Codex adapter — always exit 0, decision in JSON; ask maps to deny |
+| `harness_copilot.go` | Copilot CLI adapter — dual payload format; ask maps to deny (#3590) |
 | `policy.go`     | `decide()` — the §2 evaluation pipeline, aggregates outcomes |
 | `rules.go`      | load/parse global + project rule tiers into `config`; wires the attestation verdict into `loadConfig` |
 | `match.go`      | `matchRule()` — pure argv-vs-rule token matching (`ANY`/`HAS`) |
@@ -79,8 +87,9 @@ file embeds the docs.
 | `attest_verify.go` | pure normalize/hash/compare helpers for rule attestation (no I/O) |
 | `attest.go`     | `shizo attest` — operator-only; writes/reads `.attest` records |
 | `edit.go`       | `shizo edit` — operator-only; opens a tier in $EDITOR and attests it |
-| `shizo.sh`       | wrapper installed as the hook `command`; fails closed; embedded in the binary for `shizo install claude-hook` |
+| `shizo.sh`       | wrapper installed as the hook `command`; fails closed; embedded in the binary for `shizo install claude-hook` and the pi/OpenCode plugins |
 | `pi-shizo.ts`    | pi extension source; embedded in the binary for `shizo install pi-extension` |
+| `opencode-shizo.js` | OpenCode plugin source (dual 1.x/2.x); embedded in the binary for `shizo install opencode-plugin` |
 | `conf/`         | starter global rules, example Claude settings, editor grammar |
 
 ## Rules DSL (see `docs/RULES.md`)
