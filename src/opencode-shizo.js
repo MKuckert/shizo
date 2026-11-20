@@ -1,8 +1,11 @@
 // shizo permission plugin for the OpenCode agent (docs/OPENCODE.md).
-// Routes every shell tool call through the shizo.sh hook wrapper: a deny is
-// enforced by failing the call; allow, ask, and "no decision" fall through to
-// OpenCode's own permission flow, which prompts by default. Fail-closed: any
-// wrapper failure or unparseable output blocks the call.
+// Routes every shell tool call through the shizo.sh hook wrapper. deny and ask
+// are enforced by failing the call: OpenCode's permission defaults are
+// permissive (most permissions default to "allow"), so an ask that fell through
+// would run unconfirmed on a stock install, and this hook has no prompt of its
+// own. allow and the automode deferral fall through to OpenCode's permission
+// flow, which still applies. Fail-closed: any wrapper failure or unparseable
+// output blocks the call.
 //
 // One file serves both OpenCode plugin generations: 2.x (V2) loads the
 // default export's setup() and registers a tool hook, 1.x (V1) loads the
@@ -50,15 +53,21 @@ function runHook(command, cwd, sessionId) {
   });
 }
 
-// OpenCode has no confirm prompt in this hook: only a deny blocks here. allow,
-// ask, and "no decision" all fall through to OpenCode's own permission flow,
-// which prompts for each new command pattern unless the user configured it to
-// auto-approve (docs/OPENCODE.md). A missing or blank command is left to
-// OpenCode's own input validation.
+// deny and ask both block: OpenCode's permission defaults are permissive, so
+// an ask that fell through would run unconfirmed on a stock install, and this
+// hook has no confirm prompt of its own (docs/OPENCODE.md). allow and the
+// automode deferral fall through to OpenCode's permission flow, which still
+// applies. A missing or blank command is left to OpenCode's own input
+// validation.
 async function decide(command, cwd, sessionId) {
   if (typeof command !== "string" || command.trim() === "") return;
   const v = await runHook(command, cwd, sessionId);
   if (v.kind === "deny") throw new Error(`shizo: ${v.reason}`);
+  if (v.kind === "ask") {
+    throw new Error(
+      `shizo: ${v.reason || "asked for confirmation"} — OpenCode's permission defaults may not prompt, so the call is blocked instead. Allow it in a shizo rule to run without blocking.`
+    );
+  }
 }
 
 module.exports = {

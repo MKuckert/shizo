@@ -301,12 +301,22 @@ func installPiExtension(global bool, stdout, stderr io.Writer) int {
 		embeddedPiExtension, "pi extension", global, stdout, stderr)
 }
 
+// opencodeConfigRoot mirrors OpenCode's global config root: $XDG_CONFIG_HOME
+// when set, else $HOME/.config (packages/util/src/global-roots.ts). A plugin
+// installed anywhere else is not discovered, so the gate would silently not run.
+func opencodeConfigRoot() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return xdg
+	}
+	return filepath.Join(os.Getenv("HOME"), ".config")
+}
+
 // installOpencodePlugin installs the OpenCode plugin into
-// .opencode/plugins/shizo.js (project) or $HOME/.config/opencode/plugins/shizo.js
-// (--global).
+// .opencode/plugins/shizo.js (project) or <config root>/opencode/plugins/shizo.js
+// (--global; $XDG_CONFIG_HOME or $HOME/.config, see opencodeConfigRoot).
 func installOpencodePlugin(global bool, stdout, stderr io.Writer) int {
 	return installExtension(filepath.Join(".opencode", "plugins", "shizo.js"),
-		filepath.Join(os.Getenv("HOME"), ".config", "opencode", "plugins", "shizo.js"),
+		filepath.Join(opencodeConfigRoot(), "opencode", "plugins", "shizo.js"),
 		embeddedOpencodePlugin, "opencode plugin", global, stdout, stderr)
 }
 

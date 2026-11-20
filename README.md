@@ -100,13 +100,14 @@ The same policy pipeline serves the other harnesses with a shell tool:
 | OpenAI Codex | `PreToolUse`/`Bash` entry in `~/.codex/hooks.json` (or project/system) running `shizo hook codex` | [`docs/CODEX.md`](docs/CODEX.md) |
 | GitHub Copilot CLI | `preToolUse` entry in `.github/hooks/shizo.json` or `~/.copilot/hooks/shizo.json` running `shizo hook copilot` | [`docs/COPILOT.md`](docs/COPILOT.md) |
 | pi coding agent | extension in `.pi/extensions/shizo.ts` or `~/.pi/agent/extensions/shizo.ts` | `shizo install pi-extension [--global]`, [`docs/PI.md`](docs/PI.md) |
-| OpenCode | plugin in `.opencode/plugins/shizo.js` or `~/.config/opencode/plugins/shizo.js` | `shizo install opencode-plugin [--global]`, [`docs/OPENCODE.md`](docs/OPENCODE.md) |
+| OpenCode | plugin in `.opencode/plugins/shizo.js` or `$XDG_CONFIG_HOME/opencode/plugins/shizo.js` (`~/.config/...` when unset) | `shizo install opencode-plugin [--global]`, [`docs/OPENCODE.md`](docs/OPENCODE.md) |
 
 Codex and Copilot register the binary directly (`shizo hook <event>`); pi and
 OpenCode install a small plugin that routes each shell call through the same
 `shizo.sh` wrapper. Each integration document covers its decision mapping and
-the harness-specific safety notes — in particular, Codex proceeds on an `ask`
-and Copilot auto-approves one, so shizo maps ask to deny there.
+the harness-specific safety notes — in particular, Codex proceeds on an `ask`,
+Copilot auto-approves one, and OpenCode's permission defaults are permissive —
+so shizo maps ask to deny in all three.
 
 The sandbox must grant read-only access to `$HOME/.shizo` and write access
 to its `logs` directory. Without these grants, the hook denies every command.

@@ -64,9 +64,18 @@ func runHarness(h Harness, stdin io.Reader, stdout io.Writer) int {
 
 	root := hookRootFn()
 	if root == "" {
-		h.Emit(stdout, in, nil, Outcome{kindDeny, "cannot determine home directory for rules"})
-		return 2
+		// Return the adapter's exit code, not a hardcoded 2: Codex blocks only
+		// on a parsed deny (exit 0 + JSON) or exit 2 with a non-empty stderr
+		// reason, so a bare 2 here would fail open (docs/CODEX.md).
+		return h.Emit(stdout, in, nil, Outcome{kindDeny, "cannot determine home directory for rules"})
 	}
+
+	// No decision may run unlogged (§4.3): the direct entrypoints (shizo hook
+	// codex/copilot) skip shizo.sh's writable-log preflight, so run it here.
+	if reason := probeLogDir(); reason != "" {
+		return h.Emit(stdout, in, nil, Outcome{kindDeny, reason})
+	}
+
 	cfg := loadConfig(filepath.Join(root, "global", "rules"), projectRulesPathFor(in.Cwd), root)
 
 	var (

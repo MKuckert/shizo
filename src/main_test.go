@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // setupRun points SHIZO_DIR at a temp install with a global/rules
@@ -190,15 +191,67 @@ func TestRunCopilotEndToEnd(t *testing.T) {
 	}
 }
 
-// A logging failure (unwritable log dir) must not change the decision (T9).
-func TestLoggingFailureDoesNotChangeDecision(t *testing.T) {
+// No decision may run unlogged (§4.3): the direct entrypoints skip shizo.sh's
+// writable-log preflight, so runHarness runs it in-process — an unwritable log
+// dir denies before evaluation, through each adapter's own blocking shape
+// (Codex must exit 0 with a parsed deny; a bare exit 2 fails open there).
+func TestLogPreflightDenies(t *testing.T) {
 	setupRun(t, "allow git status ANY\n")
-	// Make HOME a regular file so MkdirAll(logDir) fails.
+	// Make HOME a regular file so the log dir cannot be created.
 	homeFile := writeFile(t, t.TempDir(), "home", "x")
 	t.Setenv("HOME", homeFile)
+
+	in := `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWith(t, in); rc != 2 || decisionOf(t, out) != "deny" {
+		t.Errorf("claude preflight: rc=%d out=%s", rc, out)
+	}
+	if rc, out := runWithH(t, codexHarness{}, in); rc != 0 || decisionOf(t, out) != "deny" {
+		t.Errorf("codex preflight: rc=%d (must be 0 for Codex to block) out=%s", rc, out)
+	}
+	inCopilot := `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWithH(t, copilotHarness{}, inCopilot); rc != 2 || !strings.Contains(out, `"permissionDecision":"deny"`) {
+		t.Errorf("copilot preflight: rc=%d out=%s", rc, out)
+	}
+}
+
+// An individual append failure after the preflight passed must not alter the
+// verdict (EVALUATION.md: logging is best effort once the dir is usable).
+func TestAppendFailureDoesNotChangeDecision(t *testing.T) {
+	setupRun(t, "allow git status ANY\n")
+	logs := filepath.Join(os.Getenv("HOME"), ".shizo", "logs")
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Make the daily log path a directory: the preflight probe (shizo.log)
+	// still passes, but the append to the daily file fails.
+	if err := os.Mkdir(filepath.Join(logs, time.Now().Format("2006-01-02")+".jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
 	if rc != 0 || decisionOf(t, out) != "allow" {
-		t.Errorf("logging failure changed decision: rc=%d out=%s", rc, out)
+		t.Errorf("append failure changed decision: rc=%d out=%s", rc, out)
+	}
+}
+
+// When the password-database lookup cannot determine the home directory, the
+// deny must go through the adapter's Emit: Codex blocks only on a parsed deny
+// (exit 0 + JSON) or exit 2 with a non-empty stderr reason, so the old
+// hardcoded `return 2` failed open there (docs/CODEX.md).
+func TestHarnessUnresolvableHome(t *testing.T) {
+	old := hookRootFn
+	hookRootFn = func() string { return "" }
+	t.Cleanup(func() { hookRootFn = old })
+
+	in := `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWith(t, in); rc != 2 || decisionOf(t, out) != "deny" {
+		t.Errorf("claude: rc=%d out=%s", rc, out)
+	}
+	if rc, out := runWithH(t, codexHarness{}, in); rc != 0 || decisionOf(t, out) != "deny" {
+		t.Errorf("codex: rc=%d (must be 0 for Codex to block) out=%s", rc, out)
+	}
+	inCopilot := `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWithH(t, copilotHarness{}, inCopilot); rc != 2 || !strings.Contains(out, `"permissionDecision":"deny"`) {
+		t.Errorf("copilot: rc=%d out=%s", rc, out)
 	}
 }
 

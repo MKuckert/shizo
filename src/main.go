@@ -205,6 +205,22 @@ func logDir() string {
 	return filepath.Join(os.Getenv("HOME"), ".shizo", "logs")
 }
 
+// probeLogDir mirrors shizo.sh's writable-log preflight for the direct hook
+// entrypoints that skip the wrapper: no decision may run unlogged (§4.3). It
+// returns a deny reason when the log dir cannot be created or probed.
+func probeLogDir() string {
+	dir := logDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Sprintf("shizo: log directory %s is not writable, so decisions cannot be logged. Add a nono write grant for it (or fix its permissions). Refusing to run unlogged.", dir)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "shizo.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Sprintf("shizo: log directory %s is not writable, so decisions cannot be logged. Add a nono write grant for it (or fix its permissions). Refusing to run unlogged.", dir)
+	}
+	f.Close()
+	return ""
+}
+
 // --- logging (§4.3) ---
 
 type cmdLog struct {

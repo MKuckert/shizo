@@ -658,6 +658,7 @@ func TestInstallOpencodePlugin(t *testing.T) {
 	}
 	proj, home := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "") // pin the $HOME/.config fallback
 
 	cases := []struct {
 		name, target string
@@ -694,6 +695,28 @@ func TestInstallOpencodePlugin(t *testing.T) {
 // The plugin spawns the wrapper on every shell call, so an opencode install
 // materializes it next to the binary — including when the plugin itself is
 // already installed (a bare release binary must self-install completely).
+// OpenCode resolves its global config root from $XDG_CONFIG_HOME when set;
+// installing under $HOME/.config there would leave the plugin undiscovered
+// and the gate silently inactive (packages/util/src/global-roots.ts).
+func TestInstallOpencodePluginXDGConfigHome(t *testing.T) {
+	fakeEngine(t)
+	proj, xdg := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", t.TempDir()) // must not be consulted for the global path
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+
+	target := filepath.Join(xdg, "opencode", "plugins", "shizo.js")
+	code, out, errb := runInstallIn(t, proj, "opencode-plugin", "--global")
+	if code != 0 || !strings.Contains(out, "installed opencode plugin") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errb)
+	}
+	if fi, err := os.Lstat(target); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("target = %v, %v; want a regular file under XDG_CONFIG_HOME", fi.Mode(), err)
+	}
+	if _, err := os.Lstat(filepath.Join(os.Getenv("HOME"), ".config", "opencode", "plugins", "shizo.js")); !os.IsNotExist(err) {
+		t.Errorf("also installed under $HOME/.config: %v", err)
+	}
+}
+
 func TestInstallOpencodePluginMaterializesWrapper(t *testing.T) {
 	engine := fakeEngine(t)
 	wrapper := filepath.Join(engine, "shizo.sh")

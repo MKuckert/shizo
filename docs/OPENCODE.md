@@ -23,7 +23,7 @@ any other shizo-gated agent:
 
 ```sh
 shizo install opencode-plugin             # .opencode/plugins/shizo.js in the cwd
-shizo install opencode-plugin --global    # ~/.config/opencode/plugins/shizo.js
+shizo install opencode-plugin --global    # $XDG_CONFIG_HOME/opencode/plugins/shizo.js (~/.config/... when unset)
 ```
 
 A re-run is a no-op, though it still ensures the wrapper exists; if the binary
@@ -42,18 +42,21 @@ The plugin runs the wrapper path this install materialized next to the binary
 | Wrapper result | Plugin behaviour |
 | --- | --- |
 | deny (exit 2) | block; the model receives the reason as the tool error |
+| ask | block; the model receives the reason — OpenCode's permission defaults are permissive, so falling through would run it unconfirmed, and this hook has no prompt of its own |
 | allow | run the command (OpenCode's own permission flow still applies) |
-| ask | OpenCode's permission prompt — that prompt is the confirm mechanism |
 | defer (empty stdout, `automode`) | OpenCode's permission flow decides |
 
 Fail-closed: a wrapper that fails to start, exits unexpectedly, or emits
 unparseable output blocks the call.
 
-OpenCode's permission system prompts for each new command pattern by default,
-so allow/ask/defer all land where a human can still say no. If you configure
-OpenCode to auto-approve bash (a permissive `permission` setting or yolo mode),
-those commands run without an interactive prompt — shizo's `deny` rules still
-block.
+OpenCode's permission defaults are permissive — most permissions default to
+`"allow"` — so the plugin blocks an `ask` rather than falling through: on a
+stock install there is no prompt that would catch it. In `automode` the
+unmatched fallthrough defers to OpenCode's permission flow, which on a stock
+install runs the command without confirmation — shizo's `deny` rules still
+block. To get an interactive gate, set the shell tool's `permission` to `ask`
+in your OpenCode config; allow decisions then run unconfirmed (by design) and
+everything else is blocked before the permission flow.
 
 ## Notes
 

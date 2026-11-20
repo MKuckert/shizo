@@ -121,9 +121,10 @@ that can edit both policy and records makes verification meaningless.
   arbitrary execution and lets the agent unregister the hook.
 - `automode` delegates unmatched commands to Claude Code's classifier, so its
   treatment of unknown commands replaces the guaranteed prompt.
-- OpenCode's permission flow can be configured to auto-approve bash, in which
-  case shizo's allow/ask outcomes run without a human prompt; deny rules still
-  block.
+- OpenCode's permission defaults are permissive, so the plugin blocks an `ask`
+  rather than deferring; in automode the unmatched fallthrough defers to
+  OpenCode's permission flow, which on a stock install runs it without a
+  prompt. Deny rules still block.
 - Hook timeouts fail open in the harnesses that time them out (Claude Code,
   Copilot CLI): a stalled hook is dropped and the call proceeds through the
   harness's normal permission flow.
