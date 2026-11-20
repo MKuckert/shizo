@@ -21,6 +21,7 @@ never touches the hook pipeline.
 
 usage: shizo install claude-hook [--project | --local | --global]
        shizo install pi-extension [--project | --global]
+       shizo install opencode-plugin [--project | --global]
 
 claude-hook registers the shizo.sh wrapper as a PreToolUse/Bash hook in a
 Claude Code settings file, merging into whatever is already there; it writes
@@ -29,13 +30,17 @@ pi-extension copies the embedded pi extension into pi's extension directory
 with the materialized wrapper path written in (docs/PI.md), and creates
 shizo.sh next to the binary if missing; a previous render with a stale path
 is updated in place, any other existing file is refused.
+opencode-plugin copies the embedded OpenCode plugin into OpenCode's plugin
+directory with the same idempotent render (docs/OPENCODE.md).
 
 Flags:
   --project   claude-hook: .claude/settings.json in the cwd (default)
               pi-extension: .pi/extensions/shizo.ts in the cwd (default)
+              opencode-plugin: .opencode/plugins/shizo.js in the cwd (default)
   --local     claude-hook only: .claude/settings.local.json in the cwd
   --global    claude-hook: $HOME/.claude/settings.json
               pi-extension: $HOME/.pi/agent/extensions/shizo.ts
+              opencode-plugin: $HOME/.config/opencode/plugins/shizo.js
 
 Exit 0 on success (or if already installed), 1 on an I/O or parse
 problem, 2 on a usage problem.`
@@ -69,14 +74,17 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 			positional = append(positional, a)
 		}
 	}
-	if len(positional) != 1 || (positional[0] != "claude-hook" && positional[0] != "pi-extension") {
-		return usageErr("expected exactly one target: claude-hook or pi-extension")
+	if len(positional) != 1 || (positional[0] != "claude-hook" && positional[0] != "pi-extension" && positional[0] != "opencode-plugin") {
+		return usageErr("expected exactly one target: claude-hook, pi-extension, or opencode-plugin")
 	}
-	if positional[0] == "pi-extension" {
+	if positional[0] == "pi-extension" || positional[0] == "opencode-plugin" {
 		if targetFlag == "--local" {
-			return usageErr("pi-extension has no --local scope")
+			return usageErr("%s has no --local scope", positional[0])
 		}
-		return installPiExtension(targetFlag == "--global", stdout, stderr)
+		if positional[0] == "pi-extension" {
+			return installPiExtension(targetFlag == "--global", stdout, stderr)
+		}
+		return installOpencodePlugin(targetFlag == "--global", stdout, stderr)
 	}
 
 	switch targetFlag {
@@ -159,36 +167,37 @@ func ensureWrapper() (string, error) {
 	return p, nil
 }
 
-// piWrapperPlaceholder is the quoted token in the embedded extension that
-// renderPiExtension replaces with the materialized wrapper path, so the
-// installed extension spawns the wrapper this install wrote (docs/PI.md).
-const piWrapperPlaceholder = `"__SHIZO_WRAPPER__"`
+// wrapperPlaceholder is the quoted token in the embedded agent extensions that
+// renderExtension replaces with the materialized wrapper path, so the installed
+// extension spawns the wrapper this install wrote (docs/PI.md,
+// docs/OPENCODE.md).
+const wrapperPlaceholder = `"__SHIZO_WRAPPER__"`
 
-// renderPiExtension returns the embedded extension with the materialized
-// wrapper path substituted for the placeholder. The path is JSON-quoted, a
-// valid TS string literal that escapes any special characters.
-func renderPiExtension(wrapperPath string) ([]byte, error) {
-	if n := bytes.Count(embeddedPiExtension, []byte(piWrapperPlaceholder)); n != 1 {
+// renderExtension returns src with the materialized wrapper path substituted
+// for the placeholder. The path is JSON-quoted, a valid TS and JS string
+// literal that escapes any special characters.
+func renderExtension(src []byte, wrapperPath string) ([]byte, error) {
+	if n := bytes.Count(src, []byte(wrapperPlaceholder)); n != 1 {
 		return nil, fmt.Errorf("embedded extension has %d placeholders, want 1", n)
 	}
 	quoted, err := json.Marshal(wrapperPath)
 	if err != nil {
 		return nil, err
 	}
-	return bytes.Replace(embeddedPiExtension, []byte(piWrapperPlaceholder), quoted, 1), nil
+	return bytes.Replace(src, []byte(wrapperPlaceholder), quoted, 1), nil
 }
 
-// wrapperPathIn returns the wrapper path substituted into a rendered
+// renderedWrapperPath returns the wrapper path substituted into a rendered
 // extension, and true if b is exactly such a render — the embedded source
 // with the placeholder replaced by one JSON string. Anything else (a hand
 // edit, another tool's file) is not a render.
-func wrapperPathIn(b []byte) (string, bool) {
-	ph := []byte(piWrapperPlaceholder)
-	i := bytes.Index(embeddedPiExtension, ph)
+func renderedWrapperPath(src, b []byte) (string, bool) {
+	ph := []byte(wrapperPlaceholder)
+	i := bytes.Index(src, ph)
 	if i < 0 {
 		return "", false
 	}
-	pre, post := embeddedPiExtension[:i], embeddedPiExtension[i+len(ph):]
+	pre, post := src[:i], src[i+len(ph):]
 	if !bytes.HasPrefix(b, pre) || !bytes.HasSuffix(b, post) {
 		return "", false
 	}
@@ -202,27 +211,27 @@ func wrapperPathIn(b []byte) (string, bool) {
 	return path, true
 }
 
-// installPiExtension copies the embedded pi extension into pi's extension
-// directory (docs/PI.md), with the materialized wrapper path written in. The
-// extension spawns that wrapper on every bash call, so a bare release binary
+// installExtension copies the embedded agent extension into target with the
+// materialized wrapper path written in (docs/PI.md, docs/OPENCODE.md). The
+// extension spawns that wrapper on every shell call, so a bare release binary
 // self-installs completely — including on a no-op re-run. Idempotent: an
 // identical regular file is left alone; a previous render with a different
 // wrapper path (the binary moved) is updated in place; any other existing
 // file is refused, never overwritten. Stale symlinks from older installs are
-// replaced by the regular copy so they cannot dangle once engine/shizo-pi.ts
-// is gone. The replacement is written to a temp file and renamed into place,
-// so an existing extension is never missing or partially written.
-func installPiExtension(global bool, stdout, stderr io.Writer) int {
-	target := filepath.Join(".pi", "extensions", "shizo.ts")
-	if global {
-		target = filepath.Join(os.Getenv("HOME"), ".pi", "agent", "extensions", "shizo.ts")
+// replaced by the regular copy so they cannot dangle. The replacement is
+// written to a temp file and renamed into place, so an existing extension is
+// never missing or partially written.
+func installExtension(project, global string, src []byte, kind string, useGlobal bool, stdout, stderr io.Writer) int {
+	target := project
+	if useGlobal {
+		target = global
 	}
 	wrapperPath, err := ensureWrapper()
 	if err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}
-	rendered, err := renderPiExtension(wrapperPath)
+	rendered, err := renderExtension(src, wrapperPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
@@ -234,7 +243,7 @@ func installPiExtension(global bool, stdout, stderr io.Writer) int {
 			return 1
 		}
 		if !bytes.Equal(cur, rendered) {
-			if _, ok := wrapperPathIn(cur); !ok {
+			if _, ok := renderedWrapperPath(src, cur); !ok {
 				fmt.Fprintf(stderr, "install: %s already exists with different content — fix or move it first\n", target)
 				return 1
 			}
@@ -254,7 +263,7 @@ func installPiExtension(global bool, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}
-	tmp, err := os.CreateTemp(dir, ".shizo.ts-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".shizo-*.tmp")
 	if err != nil {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
@@ -280,8 +289,35 @@ func installPiExtension(global bool, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "install: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "installed pi extension -> %s\n", target)
+	fmt.Fprintf(stdout, "installed %s -> %s\n", kind, target)
 	return 0
+}
+
+// installPiExtension installs the pi extension into .pi/extensions/shizo.ts
+// (project) or $HOME/.pi/agent/extensions/shizo.ts (--global).
+func installPiExtension(global bool, stdout, stderr io.Writer) int {
+	return installExtension(filepath.Join(".pi", "extensions", "shizo.ts"),
+		filepath.Join(os.Getenv("HOME"), ".pi", "agent", "extensions", "shizo.ts"),
+		embeddedPiExtension, "pi extension", global, stdout, stderr)
+}
+
+// opencodeConfigRoot mirrors OpenCode's global config root: $XDG_CONFIG_HOME
+// when set, else $HOME/.config (packages/util/src/global-roots.ts). A plugin
+// installed anywhere else is not discovered, so the gate would silently not run.
+func opencodeConfigRoot() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return xdg
+	}
+	return filepath.Join(os.Getenv("HOME"), ".config")
+}
+
+// installOpencodePlugin installs the OpenCode plugin into
+// .opencode/plugins/shizo.js (project) or <config root>/opencode/plugins/shizo.js
+// (--global; $XDG_CONFIG_HOME or $HOME/.config, see opencodeConfigRoot).
+func installOpencodePlugin(global bool, stdout, stderr io.Writer) int {
+	return installExtension(filepath.Join(".opencode", "plugins", "shizo.js"),
+		filepath.Join(opencodeConfigRoot(), "opencode", "plugins", "shizo.js"),
+		embeddedOpencodePlugin, "opencode plugin", global, stdout, stderr)
 }
 
 func readSettings(path string) (map[string]any, error) {

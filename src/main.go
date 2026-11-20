@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -28,22 +27,22 @@ var version = "dev"
 
 // rootUsage is the top-level overview printed by `help`/`--help`/`-h`/`-?`.
 // It indexes the operator subcommands; each owns its own detailed usage const.
-const rootUsage = `shizo — a Claude Code PreToolUse hook that allowlists Bash
-commands at subcommand granularity. "hook pretooluse" is the hook entrypoint: it
-reads hook JSON on stdin and emits a decision. Every other subcommand is
-operator-only and never touches the hook pipeline; with no arguments this
-prints usage and exits (it never reads stdin).
+const rootUsage = `shizo — a fail-closed gate for agentic harnesses' shell tools
+that allowlists Bash commands at subcommand granularity. "hook <event>" is the
+hook entrypoint: it reads the harness's hook JSON on stdin and emits a
+decision. Every other subcommand is operator-only and never touches the hook
+pipeline; with no arguments this prints usage and exits (it never reads stdin).
 
 usage: shizo [command] [args]
 
 Commands:
-  hook <event> hook mode: read hook JSON on stdin, emit an allow/ask/deny decision
+  hook <event> hook mode: read the harness's hook JSON on stdin, emit a decision
   validate    lint rule files (all errors + semantic warnings)
   attest      record operator approval of a rule tier (required before it is trusted)
   edit        open a rule tier in $EDITOR and attest it afterwards
   test        dry-run a command through the evaluation pipeline
   selfcheck   verify the sandbox enforces the install's read/write shape
-  install     register the Claude Code hook or the pi extension
+  install     register the Claude Code hook, pi extension, or opencode plugin
   info        print the paths shizo resolves (rules, logs, engine, hook command)
   docs        view the embedded operator docs (list with no argument)
   help [cmd]  show this overview, or detailed usage for a command
@@ -68,8 +67,10 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		switch args[0] {
 		case "hook":
 			// Unknown/missing event must never fall through to reading stdin.
-			if len(args) > 1 && args[1] == "pretooluse" {
-				return runHookPreToolUse(stdin, stdout)
+			if len(args) > 1 {
+				if h, ok := harnessByName(args[1]); ok {
+					return runHarness(h, stdin, stdout)
+				}
 			}
 			fmt.Fprintf(stderr, "shizo: hook requires a supported event\n\n%s\n", hookUsage)
 			return 2
@@ -133,19 +134,21 @@ func runHelp(args []string, stdout io.Writer) int {
 	return 0
 }
 
-// hookUsage documents the hook entrypoint invoked by shizo.sh. This is
-// the only subcommand that reads stdin and logs decisions.
-const hookUsage = `shizo hook pretooluse — the PreToolUse hook entrypoint.
+// hookUsage documents the hook entrypoints invoked by shizo.sh (and, for the
+// other events, directly by the harness). This is the only subcommand that
+// reads stdin and logs decisions.
+const hookUsage = `shizo hook <event> — the hook entrypoint.
 
-usage: shizo hook pretooluse
+usage: shizo hook <event>
 
 Events:
-  pretooluse  the only supported event
+  pretooluse  Claude Code (also spoken by the pi and opencode plugins via shizo.sh)
+  codex       OpenAI Codex (registered in hooks.json, see docs/CODEX.md)
+  copilot     GitHub Copilot CLI (registered in hooks/*.json, see docs/COPILOT.md)
 
-Reads hook JSON on stdin (tool_name, tool_input.command, cwd, session_id),
-evaluates the command against the rule tiers, and emits a decision object on
-stdout. Exit 0 for allow/ask, exit 2 for deny. The only mode that logs
-(see $SHIZO_DIR/logs).`
+The event reads its harness's hook JSON on stdin, evaluates the command
+against the rule tiers, and emits that harness's decision envelope on stdout.
+The only mode that logs (see $SHIZO_DIR/logs).`
 
 // hookRootFn resolves the install root for hook mode via the password
 // database (getpwuid), not env vars. An agent that can set $HOME or
@@ -159,70 +162,6 @@ func defaultHookRoot() string {
 		return ""
 	}
 	return filepath.Join(u.HomeDir, ".shizo")
-}
-
-func runHookPreToolUse(stdin io.Reader, stdout io.Writer) int {
-	raw, _ := io.ReadAll(stdin)
-	in, inErr := parseInput(raw)
-
-	root := hookRootFn()
-	if root == "" {
-		emitDecision(stdout, Outcome{kindDeny, "cannot determine home directory for rules"})
-		return 2
-	}
-	gPath := filepath.Join(root, "global", "rules")
-	cfg := loadConfig(gPath, projectRulesPathFor(in.Cwd), root)
-
-	var (
-		outcome Outcome
-		logs    []cmdLog
-	)
-	if inErr != "" {
-		outcome = Outcome{kindDeny, inErr}
-	} else {
-		outcome, logs = decide(in.ToolInput.Command, in.Cwd, cfg, currentEnviron())
-	}
-
-	logDecision(in, outcome, logs) // best effort; never changes the decision
-
-	switch outcome.Kind {
-	case kindDeny:
-		emitDecision(stdout, outcome)
-		return 2
-	default: // allow / ask
-		// §2.1: defer only unmatched fallthrough, not explicit ask rules
-		if cfg.returnMode == "automode" && outcome.Kind == kindUndecided {
-			fmt.Fprint(stdout, "defer")
-			return 0
-		}
-		emitDecision(stdout, outcome)
-		return 0
-	}
-}
-
-// parseInput reads the hook JSON (§2 step 1). Returns a deny reason on
-// malformed JSON or an absent/empty command.
-func parseInput(raw []byte) (hookInput, string) {
-	var in hookInput
-	if err := json.Unmarshal(raw, &in); err != nil {
-		return in, "malformed hook input: " + err.Error()
-	}
-	if strings.TrimSpace(in.ToolInput.Command) == "" {
-		return in, "empty command"
-	}
-	return in, ""
-}
-
-func emitDecision(w io.Writer, outcome Outcome) {
-	obj := map[string]any{
-		"hookSpecificOutput": map[string]any{
-			"hookEventName":            "PreToolUse",
-			"permissionDecision":       outcome.Kind.String(),
-			"permissionDecisionReason": outcome.Reason,
-		},
-	}
-	b, _ := json.Marshal(obj)
-	w.Write(b)
 }
 
 func currentEnviron() environ {
@@ -264,6 +203,22 @@ func projectRulesPathFor(cwd string) string {
 
 func logDir() string {
 	return filepath.Join(os.Getenv("HOME"), ".shizo", "logs")
+}
+
+// probeLogDir mirrors shizo.sh's writable-log preflight for the direct hook
+// entrypoints that skip the wrapper: no decision may run unlogged (§4.3). It
+// returns a deny reason when the log dir cannot be created or probed.
+func probeLogDir() string {
+	dir := logDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Sprintf("shizo: log directory %s is not writable, so decisions cannot be logged. Add a nono write grant for it (or fix its permissions). Refusing to run unlogged.", dir)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "shizo.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Sprintf("shizo: log directory %s is not writable, so decisions cannot be logged. Add a nono write grant for it (or fix its permissions). Refusing to run unlogged.", dir)
+	}
+	f.Close()
+	return ""
 }
 
 // --- logging (§4.3) ---
