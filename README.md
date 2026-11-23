@@ -1,9 +1,10 @@
 # shizo
 
-`shizo` is a fail-closed `PreToolUse` hook for Agentic Harnesses providing
-a Bash tool. It parses shell syntax, extracts every command from pipelines and
-command lists, resolves executables through `PATH`, and applies an argv-based
-rule set. Anything it cannot verify statically is denied.
+`shizo` is a fail-closed permission gate for the Bash tool of agentic coding
+harnesses (Claude Code, Codex, Copilot CLI, pi, OpenCode). It parses shell
+syntax, extracts every command from pipelines and command lists, resolves
+executables through `PATH`, and applies an argv-based rule set. Anything it
+cannot verify statically is denied.
 
 ## Why?
 
@@ -47,7 +48,10 @@ Together, the sandbox and the static rule layer produce three outcomes:
 - [`docs/RULES.md`](docs/RULES.md): rule files, matching, trust, and attestation
 - [`docs/EVALUATION.md`](docs/EVALUATION.md): ordered decision pipeline
 - [`docs/CLAUDE_CODE_HOOKS.md`](docs/CLAUDE_CODE_HOOKS.md): hook I/O and wrapper behavior
+- [`docs/CODEX.md`](docs/CODEX.md): using shizo with OpenAI Codex
+- [`docs/COPILOT.md`](docs/COPILOT.md): using shizo with GitHub Copilot CLI
 - [`docs/PI.md`](docs/PI.md): using shizo as the permission extension for the pi coding agent
+- [`docs/OPENCODE.md`](docs/OPENCODE.md): using shizo with OpenCode
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): assumptions, decisions, and residual risks
 
 ## Install
@@ -69,8 +73,9 @@ shizo install claude-hook --local    # <cwd>/.claude/settings.local.json
 shizo install claude-hook --global   # ~/.claude/settings.json
 ```
 
-The wrapper and the pi extension ship embedded in the binary, so `shizo
-install` works from a bare release download without a source checkout.
+The wrapper, the pi extension, and the OpenCode plugin ship embedded in the
+binary, so `shizo install` works from a bare release download without a source
+checkout.
 The entry is merged into whatever the settings file already contains; a
 re-run is a no-op, and a file that is not valid JSON is refused rather than
 overwritten. The result is:
@@ -85,6 +90,24 @@ overwritten. The result is:
   }
 }
 ```
+
+### Other harnesses
+
+The same policy pipeline serves the other harnesses with a shell tool:
+
+| Harness | Registration | Setup |
+| --- | --- | --- |
+| OpenAI Codex | `PreToolUse`/`Bash` entry in `~/.codex/hooks.json` (or project/system) running `shizo hook codex` | [`docs/CODEX.md`](docs/CODEX.md) |
+| GitHub Copilot CLI | `preToolUse` entry in `.github/hooks/shizo.json` or `~/.copilot/hooks/shizo.json` running `shizo hook copilot` | [`docs/COPILOT.md`](docs/COPILOT.md) |
+| pi coding agent | extension in `.pi/extensions/shizo.ts` or `~/.pi/agent/extensions/shizo.ts` | `shizo install pi-extension [--global]`, [`docs/PI.md`](docs/PI.md) |
+| OpenCode | plugin in `.opencode/plugins/shizo.js` or `$XDG_CONFIG_HOME/opencode/plugins/shizo.js` (`~/.config/...` when unset) | `shizo install opencode-plugin [--global]`, [`docs/OPENCODE.md`](docs/OPENCODE.md) |
+
+Codex and Copilot register the binary directly (`shizo hook <event>`); pi and
+OpenCode install a small plugin that routes each shell call through the same
+`shizo.sh` wrapper. Each integration document covers its decision mapping and
+the harness-specific safety notes — in particular, Codex proceeds on an `ask`,
+Copilot auto-approves one, and OpenCode's permission defaults are permissive —
+so shizo maps ask to deny in all three.
 
 The sandbox must grant read-only access to `$HOME/.shizo` and write access
 to its `logs` directory. Without these grants, the hook denies every command.

@@ -1,9 +1,12 @@
 # Architecture
 
-`shizo` is a static policy layer around Claude Code's Bash tool. The
-[evaluation pipeline](EVALUATION.md), [rules reference](RULES.md), and
-[hook protocol](CLAUDE_CODE_HOOKS.md) define behavior; this document explains
-the constraints behind it.
+`shizo` is a static policy layer around the shell tool of agentic coding
+harnesses: Claude Code, OpenAI Codex, GitHub Copilot CLI, the pi coding
+agent, and OpenCode. The [evaluation pipeline](EVALUATION.md), [rules
+reference](RULES.md), and [hook protocol](CLAUDE_CODE_HOOKS.md) define
+behavior; per-harness integration notes live in [CODEX.md](CODEX.md),
+[COPILOT.md](COPILOT.md), [PI.md](PI.md), and
+[OPENCODE.md](OPENCODE.md); this document explains the constraints behind it.
 
 ## Assumptions
 
@@ -29,6 +32,7 @@ revisited if either behavior changes.
 | ---------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Failure model          | Refuse anything not statically verified                                            | Parse, config, trust, and wrapper failures deny                                    |
 | Outcomes               | deny match → `deny`; ask match → `ask`; allow match → `allow`; unmatched → `ask`  | Common safe operations avoid prompts without silently accepting unknown commands   |
+| Harness adapters       | One adapter per harness parses the raw hook input into a common shape, checks whether it handles the tool, and emits the harness-specific decision envelope from the outcome | `decide()` stays harness-agnostic; per-harness safety quirks (an auto-approved `"ask"`, a proceed-on-failure envelope) are contained in the adapter |
 | Parser                 | `mvdan.cc/sh/v3/syntax`                                                            | Native Go AST, one dependency, no runtime bridge                                   |
 | Matching               | argv tokens with one linear `ANY` or `HAS` construct and an optional `STDIN` gate; command token matches the resolved executable basename | Bare names and absolute-path spellings hit the same rules; stdin-fed commands can be restricted independently |
 | Dynamic shell features | Inspect substitutions; reject variables, arithmetic, assignments, and functions    | Unknown runtime values cannot bypass matching                                      |
@@ -40,16 +44,16 @@ revisited if either behavior changes.
 | Project integrity      | Hash normalized tiers and verify a read-only attestation store                     | Workspace edits fail closed until approved by an operator                          |
 | Installation           | Engine, rules, and attestations below `$HOME/.shizo`, read-only in the sandbox | The agent cannot replace the gate; its registration is protected by the profile    |
 | Embedded docs          | `docs/*.md` compiled into the binary through a root-level embed package      | `shizo docs` serves the design reference from a bare release install, no source checkout needed |
-| Hook failures          | Exit 2 for denial; wrapper converts malformed outcomes to exit 2                   | Crashes and invalid output do not silently permit execution                        |
+| Hook failures          | Each adapter maps the outcome to its harness's blocking shape; the wrapper converts malformed outcomes to a denial | Crashes and invalid output do not silently permit execution                        |
 | Automode               | Defer only unmatched results; explicit ask rules emit `ask`                        | Explicit allow, deny, and ask policy remains authoritative                         |
 | Logging                | Require a writable log directory before evaluation                                 | Every attempted hook decision has a log destination, though logs remain tamperable |
 
 Self-protection belongs to the sandbox profile, not to Bash policy. Beyond
 `$HOME/.shizo`, that includes every workspace file that decides what later
 executes: `.git` (whose config can name an fsmonitor or pager command run by an
-auto-allowed `git status`), the `.claude` directory holding the hook
-registration, the project `.shizo` tier, and launcher scripts run outside the
-sandbox. Because `nono` cannot downgrade part of a read/write grant to
+auto-allowed `git status`), the harness registration files (`.claude/settings.json`,
+`.codex/hooks.json`, the pi and OpenCode plugin directories), the project
+`.shizo` tier, and launcher scripts run outside the sandbox. Because `nono` cannot downgrade part of a read/write grant to
 read-only, the profile grants read on the workspace and read/write only on
 named source directories and files.
 [`conf/nono-profile.example.json`](../conf/nono-profile.example.json) documents
@@ -117,9 +121,15 @@ that can edit both policy and records makes verification meaningless.
   arbitrary execution and lets the agent unregister the hook.
 - `automode` delegates unmatched commands to Claude Code's classifier, so its
   treatment of unknown commands replaces the guaranteed prompt.
+- OpenCode's permission defaults are permissive, so the plugin blocks an `ask`
+  rather than deferring; in automode the unmatched fallthrough defers to
+  OpenCode's permission flow, which on a stock install runs it without a
+  prompt. Deny rules still block.
+- Hook timeouts fail open in the harnesses that time them out (Claude Code,
+  Copilot CLI): a stalled hook is dropped and the call proceeds through the
+  harness's normal permission flow.
 - Rejecting assignments and dynamic argv blocks legitimate forms such as
   `FOO=1 make` and `git commit -m "$MSG"`.
-- Claude Code hook timeouts fail open because the wrapper cannot handle them.
 - Decision logs are writable in the sandbox and are not evidence-grade.
 - `SHIZO_DEBUG` records raw, attacker-controlled input and may expose argv
   secrets.

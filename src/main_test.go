@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // setupRun points SHIZO_DIR at a temp install with a global/rules
@@ -59,11 +60,15 @@ func lockdownAttestDir(t *testing.T, root string) {
 	})
 }
 
-func runWith(t *testing.T, input string) (int, string) {
+func runWithH(t *testing.T, h Harness, input string) (int, string) {
 	t.Helper()
 	var out bytes.Buffer
-	rc := runHookPreToolUse(strings.NewReader(input), &out)
+	rc := runHarness(h, strings.NewReader(input), &out)
 	return rc, out.String()
+}
+
+func runWith(t *testing.T, input string) (int, string) {
+	return runWithH(t, claudeHarness{}, input)
 }
 
 func decisionOf(t *testing.T, body string) string {
@@ -111,15 +116,142 @@ func TestRunDenyExit2(t *testing.T) {
 	}
 }
 
-// A logging failure (unwritable log dir) must not change the decision (T9).
-func TestLoggingFailureDoesNotChangeDecision(t *testing.T) {
+// End-to-end pipeline runs for the non-Claude adapters: raw stdin in, exit
+// code + envelope out, with no unit-level Emit stubbing.
+func TestRunCodexEndToEnd(t *testing.T) {
+	setupRun(t, "allow git status ANY\ndeny git push ANY\n")
+	cases := []struct {
+		name           string
+		in             string
+		wantDecision   string
+		wantReason     string // substring; "" = unchecked
+		wantUpdatedCmd string // "" = absent
+	}{
+		{"allow re-emits updatedInput", `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`, "allow", "", "git status"},
+		{"deny keeps its reason", `{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"/tmp"}`, "deny", "", ""},
+		{"fallthrough maps to deny", `{"tool_name":"Bash","tool_input":{"command":"git fetch"},"cwd":"/tmp"}`, "deny", "no allow rule matched", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rc, out := runWithH(t, codexHarness{}, c.in)
+			if rc != 0 {
+				t.Fatalf("rc = %d, want 0 (codex always exits 0); out=%s", rc, out)
+			}
+			var obj struct {
+				Hook struct {
+					Decision string         `json:"permissionDecision"`
+					Reason   string         `json:"permissionDecisionReason"`
+					Updated  map[string]any `json:"updatedInput"`
+				} `json:"hookSpecificOutput"`
+			}
+			if err := json.Unmarshal([]byte(out), &obj); err != nil {
+				t.Fatalf("bad JSON %q: %v", out, err)
+			}
+			if obj.Hook.Decision != c.wantDecision {
+				t.Errorf("decision = %q, want %q", obj.Hook.Decision, c.wantDecision)
+			}
+			if c.wantReason != "" && !strings.Contains(obj.Hook.Reason, c.wantReason) {
+				t.Errorf("reason = %q, want substring %q", obj.Hook.Reason, c.wantReason)
+			}
+			if got, _ := obj.Hook.Updated["command"].(string); got != c.wantUpdatedCmd {
+				t.Errorf("updatedInput.command = %q, want %q", got, c.wantUpdatedCmd)
+			}
+		})
+	}
+}
+
+func TestRunCopilotEndToEnd(t *testing.T) {
+	setupRun(t, "allow git status ANY\ndeny git push ANY\n")
+	cases := []struct {
+		name         string
+		in           string
+		wantRC       int
+		wantContains string // "" = unchecked
+		wantEmpty    bool   // stdout must be empty
+	}{
+		{"allow", `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`, 0, `"permissionDecision":"allow"`, false},
+		{"deny exits 2 with reason", `{"toolName":"bash","toolArgs":{"command":"git push"},"cwd":"/tmp"}`, 2, `"permissionDecision":"deny"`, false},
+		{"fallthrough maps to deny", `{"toolName":"bash","toolArgs":{"command":"git fetch"},"cwd":"/tmp"}`, 2, "no allow rule matched", false},
+		{"non-bash defers to Copilot", `{"toolName":"view","toolArgs":{"file_path":"/x"},"cwd":"/tmp"}`, 0, "", true},
+		{"malformed input denies", `{not json`, 2, "malformed hook input", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rc, out := runWithH(t, copilotHarness{}, c.in)
+			if rc != c.wantRC {
+				t.Fatalf("rc = %d, want %d; out=%s", rc, c.wantRC, out)
+			}
+			if c.wantEmpty && out != "" {
+				t.Errorf("stdout = %q, want empty", out)
+			}
+			if c.wantContains != "" && !strings.Contains(out, c.wantContains) {
+				t.Errorf("stdout = %q, want substring %q", out, c.wantContains)
+			}
+		})
+	}
+}
+
+// No decision may run unlogged (§4.3): the direct entrypoints skip shizo.sh's
+// writable-log preflight, so runHarness runs it in-process — an unwritable log
+// dir denies before evaluation, through each adapter's own blocking shape
+// (Codex must exit 0 with a parsed deny; a bare exit 2 fails open there).
+func TestLogPreflightDenies(t *testing.T) {
 	setupRun(t, "allow git status ANY\n")
-	// Make HOME a regular file so MkdirAll(logDir) fails.
+	// Make HOME a regular file so the log dir cannot be created.
 	homeFile := writeFile(t, t.TempDir(), "home", "x")
 	t.Setenv("HOME", homeFile)
+
+	in := `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWith(t, in); rc != 2 || decisionOf(t, out) != "deny" {
+		t.Errorf("claude preflight: rc=%d out=%s", rc, out)
+	}
+	if rc, out := runWithH(t, codexHarness{}, in); rc != 0 || decisionOf(t, out) != "deny" {
+		t.Errorf("codex preflight: rc=%d (must be 0 for Codex to block) out=%s", rc, out)
+	}
+	inCopilot := `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWithH(t, copilotHarness{}, inCopilot); rc != 2 || !strings.Contains(out, `"permissionDecision":"deny"`) {
+		t.Errorf("copilot preflight: rc=%d out=%s", rc, out)
+	}
+}
+
+// An individual append failure after the preflight passed must not alter the
+// verdict (EVALUATION.md: logging is best effort once the dir is usable).
+func TestAppendFailureDoesNotChangeDecision(t *testing.T) {
+	setupRun(t, "allow git status ANY\n")
+	logs := filepath.Join(os.Getenv("HOME"), ".shizo", "logs")
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Make the daily log path a directory: the preflight probe (shizo.log)
+	// still passes, but the append to the daily file fails.
+	if err := os.Mkdir(filepath.Join(logs, time.Now().Format("2006-01-02")+".jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	rc, out := runWith(t, `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`)
 	if rc != 0 || decisionOf(t, out) != "allow" {
-		t.Errorf("logging failure changed decision: rc=%d out=%s", rc, out)
+		t.Errorf("append failure changed decision: rc=%d out=%s", rc, out)
+	}
+}
+
+// When the password-database lookup cannot determine the home directory, the
+// deny must go through the adapter's Emit: Codex blocks only on a parsed deny
+// (exit 0 + JSON) or exit 2 with a non-empty stderr reason, so the old
+// hardcoded `return 2` failed open there (docs/CODEX.md).
+func TestHarnessUnresolvableHome(t *testing.T) {
+	old := hookRootFn
+	hookRootFn = func() string { return "" }
+	t.Cleanup(func() { hookRootFn = old })
+
+	in := `{"tool_name":"Bash","tool_input":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWith(t, in); rc != 2 || decisionOf(t, out) != "deny" {
+		t.Errorf("claude: rc=%d out=%s", rc, out)
+	}
+	if rc, out := runWithH(t, codexHarness{}, in); rc != 0 || decisionOf(t, out) != "deny" {
+		t.Errorf("codex: rc=%d (must be 0 for Codex to block) out=%s", rc, out)
+	}
+	inCopilot := `{"toolName":"bash","toolArgs":{"command":"git status"},"cwd":"/tmp"}`
+	if rc, out := runWithH(t, copilotHarness{}, inCopilot); rc != 2 || !strings.Contains(out, `"permissionDecision":"deny"`) {
+		t.Errorf("copilot: rc=%d out=%s", rc, out)
 	}
 }
 
@@ -129,7 +261,7 @@ func TestRunHelp(t *testing.T) {
 		want string // a substring unique to the expected usage
 	}{
 		{nil, "usage: shizo [command]"},
-		{[]string{"hook"}, "usage: shizo hook pretooluse"},
+		{[]string{"hook"}, "usage: shizo hook <event>"},
 		{[]string{"validate"}, "usage: shizo validate"},
 		{[]string{"attest"}, "usage: shizo attest"},
 		{[]string{"edit"}, "usage: shizo edit"},

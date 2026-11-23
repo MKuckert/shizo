@@ -86,5 +86,7 @@ Hook mode appends one object per invocation to
 }
 ```
 
-The wrapper refuses to start if the log directory is not writable. Once policy
-has fixed a verdict, an individual append failure does not alter it.
+The wrapper refuses to start if the log directory is not writable; the direct
+entrypoints (`shizo hook codex`/`copilot`) run the same preflight in-process
+before evaluating. Once policy has fixed a verdict, an individual append
+failure does not alter it.
