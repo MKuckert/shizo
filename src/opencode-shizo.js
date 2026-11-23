@@ -14,11 +14,21 @@
 "use strict";
 
 const { spawn } = require("node:child_process");
+const os = require("node:os");
 const path = require("node:path");
 
 // `shizo install opencode-plugin` substitutes the wrapper path it materialized
 // for __SHIZO_WRAPPER__ (docs/OPENCODE.md); SHIZO_HOOK still overrides at runtime.
 const HOOK = process.env.SHIZO_HOOK ?? "__SHIZO_WRAPPER__";
+
+// OpenCode expands a leading ~ in workdir to the home directory before resolving
+// it (packages/core/src/file-access.ts resolvePath); path.resolve would treat it
+// literally and evaluate the wrong project tier. Other forms resolve as usual.
+function resolveWorkdir(base, workdir) {
+  const w = String(workdir);
+  const expanded = w === "~" ? os.homedir() : w.startsWith("~/") ? path.join(os.homedir(), w.slice(2)) : w;
+  return path.resolve(base, expanded);
+}
 
 // Mirrors the hook contract (docs/CLAUDE_CODE_HOOKS.md): exit 0 + decision JSON
 // (allow/ask), exit 2 + deny JSON, exit 0 + empty stdout (defer). Else deny.
@@ -80,7 +90,7 @@ module.exports = {
       if (event.tool !== "shell") return;
       const input = event.input || {};
       const base = String(ctx.location.directory);
-      const cwd = input.workdir ? path.resolve(base, String(input.workdir)) : base;
+      const cwd = input.workdir ? resolveWorkdir(base, input.workdir) : base;
       await decide(input.command, cwd, String(event.sessionID ?? ""));
     });
     return () => reg.dispose();
@@ -95,7 +105,7 @@ module.exports = {
         if (hookInput.tool !== "bash") return;
         const args = output && output.args ? output.args : {};
         const base = String(input.directory);
-        const cwd = args.workdir ? path.resolve(base, String(args.workdir)) : base;
+        const cwd = args.workdir ? resolveWorkdir(base, args.workdir) : base;
         await decide(args.command, cwd, String(hookInput.sessionID ?? ""));
       },
     };
